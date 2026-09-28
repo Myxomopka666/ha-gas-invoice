@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/Myxomopka666/ha-gas-invoice/issues",
   "requirements": ["pdfminer.six>=20231228"],
   "single_config_entry": true,
-  "version": "1.0.0"
+  "version": "1.0.2"
 }
