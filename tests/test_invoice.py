@@ -6,29 +6,35 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "custom_components" / "gas_invoices"))
 import invoice as inv  # noqa: E402
+import redact  # noqa: E402
+import pytest  # noqa: E402
 
 TZ = ZoneInfo("Europe/Sofia")
 
-EUR_ONLY = """№ 0100000001/09-02-2026
+EUR_ONLY = """КОСТИНБРОДГАЗ ООД
+№ 0100000001/09-02-2026
 Сума за плащане: € 187.20
 За текущия месец представителната калоричност е: 0.010740 MWh/m3
 P00000001 01-01-2026 07:00:00 5149 01-02-2026 07:00:00 5423 274 1.000000 274.00
 Всичко: 274.00
 """
 
-DUAL = """№ 0100000002/07-11-2025
+DUAL = """КОСТИНБРОДГАЗ ООД
+№ 0100000002/07-11-2025
 Сума за плащане: € 64.90 лв 126.95
 За текущия месец представителната калоричност е: 0.010790 MWh/m3
 P00000001 01-10-2025 07:00:00 4691 01-11-2025 07:00:00 4793 102 1.000000 102.00
 """
 
-BGN_ONLY = """№ 0100000003/04-02-2021 г.
+BGN_ONLY = """КОСТИНБРОДГАЗ ООД
+№ 0100000003/04-02-2021 г.
 Сума за плащане: 285.05
 Всичко (словом): ДВЕСТА ОСЕМДЕСЕТ и ПЕТ лева и 05 ст.
 01-01-2021 07:00:00 503 01-02-2021 07:00:00 943 440 1.000000 440.00
 """
 
-COMPENSATED = """№ 0100000004/04-02-2022 г.
+COMPENSATED = """КОСТИНБРОДГАЗ ООД
+№ 0100000004/04-02-2022 г.
 Сума за плащане: 567.56
 (2.9631 MWh по 42.31 лв./MWh)
 Стойност за плащане 379.55
@@ -36,7 +42,8 @@ COMPENSATED = """№ 0100000004/04-02-2022 г.
 01-01-2022 07:00:00 2105 01-02-2022 07:00:00 2386 281 1.000000 281.00
 """
 
-METER_SWAP = """№ 0100000005/08-04-2026
+METER_SWAP = """КОСТИНБРОДГАЗ ООД
+№ 0100000005/08-04-2026
 Сума за плащане: € 120.98
 P00000001 01-03-2026 07:00:00 5627 17-03-2026 10:00:00 5711 84 1.000000 84.00
 P00000002 17-03-2026 10:00:00 6450 01-04-2026 07:00:00 6539 89 1.000000 89.00
@@ -88,3 +95,43 @@ def test_distribute_preserves_totals():
     assert abs(sum(v[0] for v in out.values()) - 274) < 1e-6
     assert abs(sum(v[2] for v in out.values()) - 187.20) < 1e-6
     assert min(out) == i.start and max(out) == i.end - timedelta(hours=1)
+
+
+def test_unknown_supplier():
+    with pytest.raises(inv.UnknownSupplierError):
+        inv.parse_text(EUR_ONLY.replace("КОСТИНБРОДГАЗ ООД", "ДРУГ ГАЗ АД"), TZ)
+
+
+def test_supplier_is_set():
+    assert inv.parse_text(EUR_ONLY, TZ).supplier == "kostinbrodgaz"
+
+
+SAMPLE_PERSONAL = """ДОСТАВЧИК: КУПУВАЧ:
+КОСТИНБРОДГАЗ ООД Иван Петров Иванов
+Адрес: гр. София, ул. Витоша 1 Адрес: гр. Костинброд, ул. Черни връх 5
+Идент. №: 131321489 Идент. №: 7501020018
+тел. 072166367 тел. 0888123456
+e-mail: office@example.bg e-mail: ivan@example.com
+Сметка: BG10UBBS88881000909267
+Клиентски номер: 101021
+Мария Георгиева
+"""
+
+
+def test_redact_masks_personal_data():
+    out, n = redact.redact(SAMPLE_PERSONAL)
+    for secret in ["Иван Петров Иванов", "Витоша", "Черни връх", "7501020018", "0888123456",
+                   "ivan@example.com", "BG10UBBS88881000909267", "101021", "Мария Георгиева"]:
+        assert secret not in out, secret
+    assert "КОСТИНБРОДГАЗ" in out and n > 5
+
+
+def test_redact_keeps_invoice_data():
+    out, _ = redact.redact(EUR_ONLY)
+    i = inv.parse_text(out, TZ)
+    assert i.number == "0100000001" and i.m3 == 274 and i.total_eur == 187.20
+
+
+def test_redact_valid_egn_anywhere():
+    out, _ = redact.redact("нещо 7501020018 и 0100123131")
+    assert "7501020018" not in out and "0100123131" in out

@@ -1,4 +1,6 @@
-"""Парсване на PDF фактури от Костинбродгаз (КОСТИНБРОДГАЗ ООД) и разпределяне на консумацията по часове.
+"""Четене на PDF фактури за газ и разпределяне на консумацията по часове.
+
+Парсерите за отделните доставчици са в пакета suppliers.
 
 Модулът няма зависимости от Home Assistant (само pdfminer.six), за да може да
 се тества отделно.
@@ -7,72 +9,22 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 _LOGGER = logging.getLogger(__name__)
 
-BGN_PER_EUR = 1.95583
-DEFAULT_CALORIFIC = 0.01075  # MWh/m³, ако фактурата не го посочва (2021 г.)
+try:  # като част от интеграцията
+    from . import suppliers
+except ImportError:  # тестове / самостоятелно ползване
+    import suppliers  # type: ignore[no-redef]
 
-
-# ----------------------------------------------------------------- модели
-@dataclass
-class Segment:
-    meter: str
-    start: datetime  # aware, UTC
-    end: datetime
-    start_reading: float
-    end_reading: float
-    m3: float
-
-
-@dataclass
-class Invoice:
-    number: str
-    date: str
-    file: str
-    segments: list[Segment] = field(default_factory=list)
-    calorific: float | None = None  # MWh/m³
-    total_eur: float | None = None
-    total_bgn: float | None = None
-    eur_from_bgn: bool = False
-    compensated: bool = False  # 2022 компенсации по РМС
-    estimated: bool = False  # дупка между фактури, попълнена от показанията
-
-    @property
-    def m3(self) -> float:
-        return sum(s.m3 for s in self.segments)
-
-    @property
-    def kwh(self) -> float:
-        return self.m3 * (self.calorific or DEFAULT_CALORIFIC) * 1000
-
-    @property
-    def start(self) -> datetime:
-        return min(s.start for s in self.segments)
-
-    @property
-    def end(self) -> datetime:
-        return max(s.end for s in self.segments)
-
-    @property
-    def days(self) -> float:
-        return (self.end - self.start).total_seconds() / 86400
-
-    def as_dict(self, tz: ZoneInfo) -> dict:
-        return {
-            "number": self.number,
-            "from": self.start.astimezone(tz).isoformat(),
-            "to": self.end.astimezone(tz).isoformat(),
-            "m3": round(self.m3, 2),
-            "kwh": round(self.kwh, 1),
-            "eur": self.total_eur,
-            "eur_per_m3": round(self.total_eur / self.m3, 4) if self.m3 else None,
-            "estimated": self.estimated,
-        }
+Invoice = suppliers.Invoice
+Segment = suppliers.Segment
+BGN_PER_EUR = suppliers.BGN_PER_EUR
+DEFAULT_CALORIFIC = suppliers.DEFAULT_CALORIFIC
+UnknownSupplierError = suppliers.UnknownSupplierError
 
 
 # ----------------------------------------------------------------- PDF -> редове текст
@@ -118,75 +70,9 @@ def pdf_lines(path) -> str:
 
 
 # ----------------------------------------------------------------- парсване
-NUM = r"\d+(?:[.,]\d+)?"
-DT = r"\d{2}-\d{2}-\d{4} \d{2}:\d{2}(?::\d{2})?"
-RE_NUMBER = re.compile(r"№\s*(\d{6,})\s*/\s*(\d{2}-\d{2}-\d{4})")
-_S = r"[ \t]+"  # само интервали - полетата трябва да са на един ред
-RE_METER = re.compile(
-    rf"(?:([A-Za-z]+\d+){_S})?(?:([A-Za-z]+\d+){_S})?({DT}){_S}({NUM}){_S}({DT}){_S}({NUM})"
-    rf"{_S}({NUM}){_S}({NUM}){_S}({NUM})[ \t]*$",
-    re.M,
-)
-RE_CALORIFIC = re.compile(r"(\d+[.,]\d+)\s*MWh\s*/\s*m3", re.I)
-MONEY = r"(\d+[.,]\d{2})"
-RE_EUR = (re.compile(r"(?:€|EUR)\s*" + MONEY), re.compile(MONEY + r"\s*(?:€|EUR)"))
-RE_BGN = (re.compile(r"(?:лв\.?|BGN)\s*" + MONEY), re.compile(MONEY + r"\s*(?:лв|BGN)"))
-
-
-def _num(s: str) -> float:
-    return float(s.replace(" ", "").replace(",", "."))
-
-
-def _dt(s: str, tz: ZoneInfo) -> datetime:
-    fmt = "%d-%m-%Y %H:%M:%S" if s.count(":") == 2 else "%d-%m-%Y %H:%M"
-    return datetime.strptime(s, fmt).replace(tzinfo=tz).astimezone(timezone.utc)
-
-
-def _first(rxs, text: str) -> float | None:
-    for rx in rxs:
-        if m := rx.search(text):
-            return _num(m.group(1))
-    return None
-
-
 def parse_text(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
-    m = RE_NUMBER.search(text)
-    if not m:
-        raise ValueError("не намирам номер на фактура")
-    inv = Invoice(number=m.group(1), date=m.group(2), file=filename)
-
-    for m in RE_METER.finditer(text):
-        meter, _corr, d1, r1, d2, r2, _diff, _coef, billed = m.groups()
-        inv.segments.append(
-            Segment(meter or "", _dt(d1, tz), _dt(d2, tz), _num(r1), _num(r2), _num(billed))
-        )
-    if not inv.segments:
-        raise ValueError("не намирам таблицата с показанията на разходомера")
-
-    if c := RE_CALORIFIC.search(text):
-        inv.calorific = _num(c.group(1))
-
-    # Сума за плащане:
-    #  от 08.2025: "€ 64.90 лв 126.95" или само "€ 120.98"
-    #  до 07.2025: само в лева "285.05"
-    #  2022: компенсация по РМС -> реално платеното е "Стойност за плащане 379.55"
-    i = text.find("Сума за плащане")
-    zone = text[i : i + 120] if i >= 0 else ""
-    inv.total_eur = _first(RE_EUR, zone)
-    if m := re.search(rf"Стойност за плащане\s*:?\s*(-?{NUM})", text):
-        inv.total_bgn = _num(m.group(1))
-        inv.compensated = True
-    else:
-        inv.total_bgn = _first(RE_BGN, zone)
-        if inv.total_bgn is None and inv.total_eur is None:
-            if m := re.search(rf"Сума за плащане\s*:?\s*({NUM})", text):
-                inv.total_bgn = _num(m.group(1))
-    if inv.total_eur is None and inv.total_bgn is not None:
-        inv.total_eur = round(inv.total_bgn / BGN_PER_EUR, 2)
-        inv.eur_from_bgn = True
-    if inv.total_eur is None:
-        raise ValueError("не намирам сума за плащане")
-    return inv
+    """Разпознава доставчика по текста и парсва с неговия парсер."""
+    return suppliers.parse(text, tz, filename)
 
 
 def load_invoices(

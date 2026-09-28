@@ -1,0 +1,32 @@
+name: Проблем / Bug report
+description: Нещо не работи / Something is not working
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Версия на Gas Invoices / Gas Invoices version
+      placeholder: "1.3.0"
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Версия на Home Assistant / Home Assistant version
+      placeholder: "2026.9.x"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: Какво се случва / What happens
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Лог / Log (Settings → System → Logs, търси / search „gas_invoices“)
+      render: text
+  - type: markdown
+    attributes:
+      value: "**Не прикачвай фактури** – в тях има лични данни. / **Do not attach invoices** – they contain personal data."

@@ -34,7 +34,8 @@
         "title": "Gas invoices",
         "menu_options": {
           "upload": "Upload invoices (PDF or ZIP)",
-          "settings": "Settings"
+          "settings": "Settings",
+          "debug": "Invoice diagnostics (new supplier)"
         }
       },
       "upload": {
@@ -59,6 +60,17 @@
           "base_temp": "Outdoor temperature below which heating is assumed.",
           "base_load": "Hot water and cooking. auto = lowest invoice within ±6 months."
         }
+      },
+      "debug": {
+        "title": "Invoice diagnostics",
+        "description": "Choose a PDF invoice from a supplier that is not supported yet. The integration extracts its text and masks personal data (name, address, personal ID, customer number, phone, e-mail, IBAN). **The file is not stored.**\n\nReview the text, copy it and send it in a [GitHub new supplier request]({issue_url}).",
+        "data": {
+          "file": "PDF invoice",
+          "mask": "Also hide (optional)"
+        },
+        "data_description": {
+          "mask": "Comma-separated words, e.g. your name or street if they remain visible."
+        }
       }
     },
     "error": {
@@ -67,7 +79,8 @@
       "no_invoices": "No invoice was added:\n{details}"
     },
     "abort": {
-      "uploaded": "Invoices uploaded: {added} new, {updated} already uploaded, {duplicates} duplicates, {skipped} skipped.\nImport: {summary}\n\nSkipped files:\n{problems}"
+      "uploaded": "Invoices uploaded: {added} new, {updated} already uploaded, {duplicates} duplicates, {skipped} skipped.\nImport: {summary}\n\nSkipped files:\n{problems}",
+      "debug": "{status}\n\nMasked items: **{masked}**. Review the text - if anything personal remains, run the diagnostics again and add it to „Also hide“.\n\nCopy the text and send it in a [new supplier request]({issue_url}):\n\n```\n{text}\n```"
     }
   },
   "entity": {
@@ -125,6 +138,20 @@
         "base_load": {
           "name": "Base load (m³/day or auto)",
           "description": "Hot water and cooking. auto = lowest invoice within ±6 months."
+        }
+      }
+    },
+    "debug_invoice": {
+      "name": "Invoice diagnostics",
+      "description": "Returns the text of a PDF invoice with personal data masked - for requesting support of a new supplier.",
+      "fields": {
+        "file": {
+          "name": "File",
+          "description": "File name in the invoice folder or an absolute path."
+        },
+        "mask": {
+          "name": "Also hide",
+          "description": "Extra words to mask."
         }
       }
     }

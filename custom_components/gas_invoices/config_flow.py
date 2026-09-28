@@ -20,12 +20,14 @@ from .const import (
     CONF_FILE,
     CONF_FILL_GAPS,
     CONF_FOLDER,
+    CONF_MASK,
+    ISSUE_URL,
     CONF_WEATHER,
     DEFAULT_FOLDER_NAME,
     DEFAULTS,
     DOMAIN,
 )
-from .importer import save_upload
+from .importer import debug_pdf, save_upload
 
 
 def _settings_schema(values: dict) -> vol.Schema:
@@ -94,9 +96,14 @@ def _process_upload(hass: HomeAssistant, file_id: str, folder: Path, tz: ZoneInf
         return save_upload(path, folder, tz, texts)
 
 
+def _process_debug(hass: HomeAssistant, file_id: str, tz: ZoneInfo, extra: list[str]) -> dict:
+    with process_uploaded_file(hass, file_id) as path:
+        return debug_pdf(path.read_bytes(), path.name, tz, extra)
+
+
 class GasInvoicesOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="init", menu_options=["upload", "settings"])
+        return self.async_show_menu(step_id="init", menu_options=["upload", "debug", "settings"])
 
     async def async_step_upload(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         from . import async_run_import, entry_options
@@ -153,6 +160,50 @@ class GasInvoicesOptionsFlow(OptionsFlow):
             ),
             errors=errors,
             description_placeholders=placeholders,
+        )
+
+    async def async_step_debug(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Диагностика: текст на фактура със замаскирани лични данни (за нов доставчик)."""
+        if user_input is not None:
+            tz = ZoneInfo(self.hass.config.time_zone)
+            extra = [w.strip() for w in str(user_input.get(CONF_MASK, "")).split(",") if w.strip()]
+            res = await self.hass.async_add_executor_job(
+                _process_debug, self.hass, user_input[CONF_FILE], tz, extra
+            )
+            if res.get("parsed"):
+                p = res["parsed"]
+                status = (
+                    f"✅ Разпозната фактура от **{res['supplier']}**: № {p['number']}, "
+                    f"{p['m3']} m³, {p['eur']} €. Тя вече се поддържа - качи я от „Качи фактури“."
+                )
+            elif res.get("supported"):
+                status = f"⚠️ Доставчикът **{res['supplier']}** се поддържа, но фактурата не се разчита: {res.get('error')}"
+            else:
+                status = "❓ Доставчикът още не се поддържа."
+            text = res.get("text", "")
+            if len(text) > 6000:
+                text = text[:6000] + "\n… (съкратено)"
+            return self.async_abort(
+                reason="debug",
+                description_placeholders={
+                    "status": status,
+                    "masked": str(res.get("masked", 0)),
+                    "text": text or res.get("error", ""),
+                    "issue_url": ISSUE_URL,
+                },
+            )
+
+        return self.async_show_form(
+            step_id="debug",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_FILE): selector.FileSelector(
+                        selector.FileSelectorConfig(accept=".pdf,application/pdf")
+                    ),
+                    vol.Optional(CONF_MASK, default=""): selector.TextSelector(),
+                }
+            ),
+            description_placeholders={"issue_url": ISSUE_URL},
         )
 
     async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

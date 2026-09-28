@@ -3,6 +3,7 @@ from __future__ import annotations
 
 DOMAIN = "gas_invoices"
 SERVICE_IMPORT = "import_invoices"
+SERVICE_DEBUG = "debug_invoice"
 EVENT_IMPORTED = f"{DOMAIN}_imported"
 SIGNAL_UPDATED = f"{DOMAIN}_updated_{{}}"  # .format(entry_id)
 
@@ -18,6 +19,8 @@ CONF_WEATHER = "weather"
 CONF_DAILY = "daily"
 CONF_RESET = "reset"
 CONF_FILE = "file"
+CONF_MASK = "mask"
+ISSUE_URL = "https://github.com/Myxomopka666/ha-gas-invoice/issues/new?template=new_supplier.yml"
 
 DEFAULT_FOLDER_NAME = "gas_invoices"  # под /config
 DEFAULTS = {

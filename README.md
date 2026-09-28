@@ -6,7 +6,7 @@ Track your natural gas consumption and cost in the **Energy dashboard** without 
 
 Upload your invoices (one PDF or a ZIP with many). The integration reads each invoice's billing period, meter readings, volume (m³), calorific value and amount due. It then back-fills Home Assistant's long-term statistics **for the actual days of the billing period**, not the day the invoice arrived.
 
-> **Supported suppliers:** КОСТИНБРОДГАЗ ООД (Kostinbrod, Bulgaria). This covers all invoice layouts since 2021: BGN only, BGN with 2022 government compensation, dual EUR/BGN, and EUR only. Parsers for other suppliers are welcome, see [Contributing](#contributing).
+> **Supported suppliers:** КОСТИНБРОДГАЗ ООД (Kostinbrod, Bulgaria). This covers all invoice layouts since 2021: BGN only, BGN with 2022 government compensation, dual EUR/BGN, and EUR only. Your supplier is missing? See [Add your supplier](#add-your-supplier), it takes 2 minutes and no personal data leaves your home.
 
 ## Features
 
@@ -90,11 +90,29 @@ Every import rebuilds the whole history from all PDFs in the folder and overwrit
 
 Invoices contain personal data, such as name, address and personal ID number. They are stored only in the configured folder, which is not exposed via `/local`. The extracted text is cached in `.storage/gas_invoices.<entry_id>`. Temperatures are fetched from Open-Meteo using your Home Assistant coordinates only. **Never attach real invoices to GitHub issues.**
 
+## Add your supplier
+
+Every supplier formats its invoices differently, so each one needs its own small parser. You can help without sharing any personal data:
+
+1. In Home Assistant open **Settings → Devices & services → Gas Invoices → Configure → Invoice diagnostics**.
+2. Choose one of your PDF invoices. The file is **not stored**. The integration only extracts its text and masks personal data: name, address, personal ID (ЕГН), customer number, phone, e-mail and IBAN.
+3. Review the text. If something personal is still visible, run it again and list those words in **Also hide**.
+4. Open a [new supplier request](https://github.com/Myxomopka666/ha-gas-invoice/issues/new?template=new_supplier.yml) and paste the text together with the expected values (m³, kWh, total).
+
+The same is available as an action for files already in the invoice folder:
+
+```yaml
+action: gas_invoices.debug_invoice
+data:
+  file: 2026-01_0100123131.pdf
+  mask: ["Ivan Ivanov"]
+```
+
+**Never attach real PDF invoices to issues.**
+
 ## Contributing
 
-`invoice.py` has no Home Assistant dependencies. To support another supplier, add a parser that turns the extracted PDF text into `Invoice` / `Segment` objects. Please use anonymised samples in tests.
-
----
+Parsers live in `custom_components/gas_invoices/suppliers/`. Each module defines `KEY`, `NAME`, `detect(text) -> bool` and `parse(text, tz, filename) -> Invoice`, and is registered in `suppliers/__init__.py`. They have no Home Assistant dependencies. Add tests with anonymised text in `tests/`.
 
 ## На български
 
@@ -104,6 +122,7 @@ Invoices contain personal data, such as name, address and personal ID number. Th
 - **Разпределение:** консумацията и цената се разпределят по дните от периода на фактурата, според температурите.
 - **Energy таблото:** данните се появяват там като газ консумация и разход.
 - **Поддържани фактури:** засега само от Костинбродгаз, всички формати от 2021 г. насам.
+- **Друг доставчик?** Configure → **Диагностика на фактура** дава текста на фактурата без лични данни. Изпрати го в [заявка за нов доставчик](https://github.com/Myxomopka666/ha-gas-invoice/issues/new?template=new_supplier.yml).
 
 ## License
 

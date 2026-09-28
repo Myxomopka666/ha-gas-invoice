@@ -1,0 +1,54 @@
+name: Нов доставчик / New gas supplier
+description: Поискай поддръжка за фактури от друг доставчик на газ / Request support for another gas supplier
+title: "[Supplier] "
+labels: ["new supplier"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **НЕ прикачвай PDF файла!** Фактурите съдържат лични данни.
+        Вместо това в Home Assistant отвори **Settings → Devices & services → Gas Invoices → Configure → Диагностика на фактура**,
+        избери фактурата и копирай замаскирания текст тук. Прегледай го преди изпращане.
+
+        **Do NOT attach the PDF!** Invoices contain personal data. In Home Assistant open
+        **Settings → Devices & services → Gas Invoices → Configure → Invoice diagnostics**, pick the invoice and paste the masked text here. Review it before submitting.
+  - type: input
+    id: supplier
+    attributes:
+      label: Доставчик / Supplier
+      placeholder: "Овергаз, Ситигаз, Аресгаз…"
+    validations:
+      required: true
+  - type: input
+    id: period
+    attributes:
+      label: Период на фактурата / Invoice period
+      placeholder: "01.01.2026 – 01.02.2026"
+  - type: input
+    id: expected
+    attributes:
+      label: Очаквани стойности от фактурата / Expected values (m³, kWh, сума / total)
+      placeholder: "274 m³, 2943 kWh, 187.20 €"
+    validations:
+      required: true
+  - type: textarea
+    id: text
+    attributes:
+      label: Замаскиран текст / Masked text
+      description: Резултатът от „Диагностика на фактура“ / Output of „Invoice diagnostics“
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: text2
+    attributes:
+      label: Втора фактура (по желание) / Second invoice (optional)
+      description: Фактура от друг месец помага да се хванат разлики във формата / An invoice from another month helps catch layout differences
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Лични данни / Personal data
+      options:
+        - label: Прегледах текста и в него няма лични данни (име, адрес, ЕГН, клиентски номер) / I reviewed the text and it contains no personal data
+          required: true

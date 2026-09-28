@@ -11,6 +11,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import voluptuous as vol
 
@@ -36,15 +37,18 @@ from .const import (
     DEFAULTS,
     DOMAIN,
     EVENT_IMPORTED,
+    SERVICE_DEBUG,
     SERVICE_IMPORT,
+    CONF_FILE,
+    CONF_MASK,
     SIGNAL_UPDATED,
 )
 from .http_api import GasInvoicesUploadView
-from .importer import async_import
+from .importer import async_import, debug_pdf
 
 from .frontend import async_setup_card
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.BUTTON, Platform.SENSOR]
@@ -58,6 +62,14 @@ SERVICE_SCHEMA = vol.Schema(
         vol.Optional(CONF_BASE_LOAD): cv.string,
         vol.Optional(CONF_FILL_GAPS): cv.boolean,
         vol.Optional(CONF_WEATHER): cv.boolean,
+    }
+)
+
+
+DEBUG_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_FILE): cv.string,
+        vol.Optional(CONF_MASK, default=[]): vol.All(cv.ensure_list, [cv.string]),
     }
 )
 
@@ -114,6 +126,29 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         handle_import,
         schema=SERVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    async def handle_debug(call: ServiceCall) -> ServiceResponse:
+        """Текст на фактура със замаскирани лични данни - за заявка за нов доставчик."""
+        path = Path(call.data[CONF_FILE])
+        if not path.is_absolute():
+            entries = hass.config_entries.async_loaded_entries(DOMAIN)
+            if not entries:
+                raise HomeAssistantError("Gas Invoices не е конфигурирана")
+            path = Path(entry_options(entries[0])[CONF_FOLDER]) / path
+        if not await hass.async_add_executor_job(path.is_file):
+            raise HomeAssistantError(f"Файлът {path} не съществува")
+        data = await hass.async_add_executor_job(path.read_bytes)
+        return await hass.async_add_executor_job(
+            debug_pdf, data, path.name, ZoneInfo(hass.config.time_zone), call.data.get(CONF_MASK, [])
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DEBUG,
+        handle_debug,
+        schema=DEBUG_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
     )
     return True
 

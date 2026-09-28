@@ -25,3 +25,15 @@ import_invoices:
       example: auto
       selector:
         text:
+debug_invoice:
+  fields:
+    file:
+      required: true
+      example: 2026-01_0100123131.pdf
+      selector:
+        text:
+    mask:
+      example: "Иван Иванов, ул. Витоша"
+      selector:
+        text:
+          multiple: true

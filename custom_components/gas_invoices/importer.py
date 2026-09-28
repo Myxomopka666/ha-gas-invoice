@@ -109,6 +109,11 @@ def save_files(
         try:
             text = inv_mod.pdf_lines(io.BytesIO(data))
             inv = inv_mod.parse_text(text, tz, name)
+        except inv_mod.UnknownSupplierError:
+            res.errors.append(
+                f"{name}: доставчикът още не се поддържа - виж Configure → Диагностика на фактура"
+            )
+            continue
         except Exception as err:  # noqa: BLE001
             res.errors.append(f"{name}: не е разпозната фактура ({err})")
             continue
@@ -294,3 +299,32 @@ async def _async_temperatures(
                 break
 
     return {h.astimezone(timezone.utc): v for h in hours if (v := cached(h)) is not None}
+
+
+# --------------------------------------------------------------------------- диагностика
+def debug_pdf(data: bytes, name: str, tz: ZoneInfo, extra_mask: list[str] | None = None) -> dict:
+    """Извлича текста на PDF, замаскира личните данни и опитва да го разпознае.
+    Резултатът е безопасен за споделяне при заявка за нов доставчик.
+    Блокираща функция - за executor."""
+    from . import suppliers
+    from .redact import redact
+
+    if not data.startswith(b"%PDF"):
+        return {"file": name, "error": "не е PDF файл"}
+    text = inv_mod.pdf_lines(io.BytesIO(data))
+    red, masked = redact(text, extra_mask)
+    sup = suppliers.detect(text)
+    out = {
+        "file": name,
+        "supplier": sup.NAME if sup else None,
+        "supported": sup is not None,
+        "masked": masked,
+        "chars": len(red),
+        "text": red,
+    }
+    try:
+        inv = inv_mod.parse_text(text, tz, name)
+        out["parsed"] = inv.as_dict(tz)
+    except Exception as err:  # noqa: BLE001
+        out["error"] = str(err)
+    return out
