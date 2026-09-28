@@ -1,0 +1,27 @@
+import_invoices:
+  fields:
+    reset:
+      default: false
+      selector:
+        boolean:
+    folder:
+      example: /config/gas_invoices
+      selector:
+        text:
+    fill_gaps:
+      selector:
+        boolean:
+    weather:
+      selector:
+        boolean:
+    base_temp:
+      selector:
+        number:
+          min: 10
+          max: 22
+          step: 0.5
+          unit_of_measurement: °C
+    base_load:
+      example: auto
+      selector:
+        text:

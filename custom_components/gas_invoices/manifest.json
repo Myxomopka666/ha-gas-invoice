@@ -1,0 +1,14 @@
+{
+  "domain": "gas_invoices",
+  "name": "Gas Invoices",
+  "codeowners": ["@Myxomopka666"],
+  "config_flow": true,
+  "dependencies": ["file_upload", "recorder"],
+  "documentation": "https://github.com/Myxomopka666/ha-gas-invoice",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/Myxomopka666/ha-gas-invoice/issues",
+  "requirements": ["pdfminer.six>=20231228"],
+  "single_config_entry": true,
+  "version": "1.0.0"
+}

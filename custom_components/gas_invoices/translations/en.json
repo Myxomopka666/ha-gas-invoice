@@ -1,0 +1,132 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Gas invoices",
+        "description": "Import gas invoices (PDF) into the Energy dashboard.",
+        "data": {
+          "folder": "Invoice folder",
+          "base_temp": "Heating base temperature",
+          "base_load": "Base load (m³/day or auto)",
+          "fill_gaps": "Fill gaps from meter readings",
+          "weather": "Distribute by temperature (Open-Meteo)",
+          "daily": "Automatic nightly import (03:15)"
+        },
+        "data_description": {
+          "folder": "Uploaded PDFs are stored here. A network share like /share/... works too.",
+          "base_temp": "Outdoor temperature below which heating is assumed.",
+          "base_load": "Hot water and cooking. auto = lowest invoice within ±6 months."
+        }
+      }
+    },
+    "error": {
+      "invalid_base_load": "Enter a number (m³/day) or auto",
+      "invalid_folder": "Path must be absolute, e.g. /config/gas_invoices",
+      "no_invoices": "No invoice was added:\n{details}"
+    },
+    "abort": {
+      "already_configured": "Already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gas invoices",
+        "menu_options": {
+          "upload": "Upload invoices (PDF or ZIP)",
+          "settings": "Settings"
+        }
+      },
+      "upload": {
+        "title": "Upload invoices",
+        "description": "Choose one PDF invoice or a ZIP archive with many invoices. Import runs automatically after upload.",
+        "data": {
+          "file": "File"
+        }
+      },
+      "settings": {
+        "title": "Settings",
+        "data": {
+          "folder": "Invoice folder",
+          "base_temp": "Heating base temperature",
+          "base_load": "Base load (m³/day or auto)",
+          "fill_gaps": "Fill gaps from meter readings",
+          "weather": "Distribute by temperature (Open-Meteo)",
+          "daily": "Automatic nightly import (03:15)"
+        },
+        "data_description": {
+          "folder": "Uploaded PDFs are stored here. A network share like /share/... works too.",
+          "base_temp": "Outdoor temperature below which heating is assumed.",
+          "base_load": "Hot water and cooking. auto = lowest invoice within ±6 months."
+        }
+      }
+    },
+    "error": {
+      "invalid_base_load": "Enter a number (m³/day) or auto",
+      "invalid_folder": "Path must be absolute, e.g. /config/gas_invoices",
+      "no_invoices": "No invoice was added:\n{details}"
+    },
+    "abort": {
+      "uploaded": "Invoices added: {added}, skipped: {skipped}.\nImport: {summary}\n\nSkipped files:\n{problems}"
+    }
+  },
+  "entity": {
+    "button": {
+      "import": {
+        "name": "Import invoices"
+      }
+    },
+    "sensor": {
+      "last_m3": {
+        "name": "Last invoice consumption"
+      },
+      "last_kwh": {
+        "name": "Last invoice energy"
+      },
+      "last_cost": {
+        "name": "Last invoice cost"
+      },
+      "last_price": {
+        "name": "Last invoice price per m³"
+      },
+      "invoices": {
+        "name": "Invoices"
+      },
+      "last_import": {
+        "name": "Last import"
+      }
+    }
+  },
+  "services": {
+    "import_invoices": {
+      "name": "Import gas invoices",
+      "description": "Reads the PDF invoices from the folder and writes the gas_invoices:consumption / energy / cost statistics.",
+      "fields": {
+        "reset": {
+          "name": "Clear old statistics",
+          "description": "Only needed after removing an invoice or adding a missing period."
+        },
+        "folder": {
+          "name": "Invoice folder",
+          "description": "Defaults to the configured folder."
+        },
+        "fill_gaps": {
+          "name": "Fill gaps from meter readings",
+          "description": "Cost for filled periods is an estimate."
+        },
+        "weather": {
+          "name": "Distribute by temperature (Open-Meteo)",
+          "description": "Off = even distribution."
+        },
+        "base_temp": {
+          "name": "Heating base temperature",
+          "description": "Outdoor temperature below which heating is assumed."
+        },
+        "base_load": {
+          "name": "Base load (m³/day or auto)",
+          "description": "Hot water and cooking. auto = lowest invoice within ±6 months."
+        }
+      }
+    }
+  }
+}
