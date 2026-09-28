@@ -3,6 +3,13 @@
  * Зарежда се автоматично от интеграцията gas_invoices.
  *   type: custom:gas-invoices-card
  */
+const CARD_VERSION = "1.1.1";
+console.info(
+  `%c GAS-INVOICES-CARD %c v${CARD_VERSION} `,
+  "color:#fff;background:#1e78e6;font-weight:bold",
+  "color:#1e78e6;background:#fff;font-weight:bold"
+);
+
 const BATCH_BYTES = 8 * 1024 * 1024; // HA приема до 16 MB на заявка
 
 const TEXT = {

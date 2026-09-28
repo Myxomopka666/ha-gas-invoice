@@ -46,7 +46,15 @@ Home Assistant writes statistics in the background. With several years of data, 
 
 ## Dashboard card
 
-The integration registers the card automatically, so there is nothing to add under *Resources*.
+The integration adds the card to *Settings → Dashboards → Resources* automatically on startup (dashboards in storage mode). If your dashboards use YAML mode, add it yourself:
+
+```yaml
+lovelace:
+  resources:
+    - url: /gas_invoices/gas-invoices-card.js
+      type: module
+```
+
 Edit a dashboard → **Add card** → search **Gas Invoices**, or use YAML:
 
 ```yaml

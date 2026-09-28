@@ -9,6 +9,7 @@
     "file_upload",
     "frontend",
     "http",
+    "lovelace",
     "recorder"
   ],
   "documentation": "https://github.com/Myxomopka666/ha-gas-invoice",
@@ -19,5 +20,5 @@
     "pdfminer.six>=20231228"
   ],
   "single_config_entry": true,
-  "version": "1.1.0"
+  "version": "1.1.1"
 }
