@@ -67,7 +67,7 @@
       "no_invoices": "Не е добавена нито една фактура:\n{details}"
     },
     "abort": {
-      "uploaded": "Добавени фактури: {added}, пропуснати: {skipped}.\nИмпорт: {summary}\n\nПропуснати файлове:\n{problems}"
+      "uploaded": "Качени фактури: {added} нови, {updated} вече качени, {duplicates} дубликати, {skipped} пропуснати.\nИмпорт: {summary}\n\nПропуснати файлове:\n{problems}"
     }
   },
   "entity": {

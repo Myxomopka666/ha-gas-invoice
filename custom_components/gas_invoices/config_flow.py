@@ -110,15 +110,16 @@ class GasInvoicesOptionsFlow(OptionsFlow):
             store = entry.runtime_data.store
             cache = await store.async_load() or {}
             texts = cache.setdefault("texts", {})
-            added, problems = await self.hass.async_add_executor_job(
+            res = await self.hass.async_add_executor_job(
                 _process_upload, self.hass, user_input[CONF_FILE], folder, tz, texts
             )
-            if added:
-                await store.async_save(cache)
-            if not added:
+            if not res.saved:
                 errors["base"] = "no_invoices"
-                placeholders["details"] = "\n".join(problems[:10])
+                placeholders["details"] = "\n".join(res.errors[:10]) or (
+                    f"дубликати: {len(res.duplicates)}"
+                )
             else:
+                await store.async_save(cache)
                 try:
                     result = await async_run_import(self.hass, entry)
                     summary = (
@@ -130,10 +131,12 @@ class GasInvoicesOptionsFlow(OptionsFlow):
                 return self.async_abort(
                     reason="uploaded",
                     description_placeholders={
-                        "added": str(len(added)),
-                        "skipped": str(len(problems)),
+                        "added": str(len(res.added)),
+                        "updated": str(len(res.updated)),
+                        "duplicates": str(len(res.duplicates)),
+                        "skipped": str(len(res.errors)),
                         "summary": summary,
-                        "problems": "\n".join(problems[:10]) or "-",
+                        "problems": "\n".join(res.errors[:10]) or "-",
                     },
                 )
 

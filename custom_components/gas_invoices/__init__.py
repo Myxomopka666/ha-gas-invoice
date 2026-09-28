@@ -39,7 +39,14 @@ from .const import (
     SERVICE_IMPORT,
     SIGNAL_UPDATED,
 )
+from .http_api import GasInvoicesUploadView
 from .importer import async_import
+
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
+
+CARD_URL_BASE = f"/{DOMAIN}"
+VERSION = "1.1.0"
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.BUTTON, Platform.SENSOR]
@@ -93,6 +100,13 @@ async def async_run_import(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    # Lovelace картата (custom:gas-invoices-card) и endpoint-ът за качване от нея
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(CARD_URL_BASE, str(Path(__file__).parent / "www"), False)]
+    )
+    add_extra_js_url(hass, f"{CARD_URL_BASE}/gas-invoices-card.js?v={VERSION}")
+    hass.http.register_view(GasInvoicesUploadView())
+
     async def handle_import(call: ServiceCall) -> ServiceResponse:
         entries = hass.config_entries.async_loaded_entries(DOMAIN)
         if not entries:

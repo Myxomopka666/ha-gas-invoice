@@ -10,7 +10,9 @@ Upload your invoices (one PDF or a ZIP with many). The integration reads each in
 
 ## Features
 
-- **Upload from the UI:** a PDF or a ZIP with many PDFs. Files are validated and stored as `YYYY-MM_<invoice>.pdf`.
+- **Dashboard card with drag & drop:** drop many PDFs (or ZIPs) at once, see the summary of the last invoice.
+- **Upload from the integration options:** a PDF or a ZIP with many PDFs. Files are validated and stored as `YYYY-MM_<invoice>.pdf`.
+- **Clear upload report:** new / already uploaded / duplicates / skipped (duplicates are detected by invoice number, so the same invoice is never counted twice).
 - **Three external statistics** for the Energy dashboard:
   - `gas_invoices:consumption` (m³);
   - `gas_invoices:energy` (kWh, from the calorific value on the invoice);
@@ -41,6 +43,18 @@ Copy `custom_components/gas_invoices` to `/config/custom_components/` and restar
 4. Settings → Dashboards → **Energy** → *Gas consumption* → add **Gas consumption (invoices)** (`gas_invoices:consumption`). For the cost, choose *Use an entity tracking the total costs* → **Gas cost (invoices)** (`gas_invoices:cost`). With the Bulgarian UI language the names are *Газ консумация / Газ разход (фактури)*.
 
 Home Assistant writes statistics in the background. With several years of data, allow 1–2 minutes before the charts fill in.
+
+## Dashboard card
+
+The integration registers the card automatically, so there is nothing to add under *Resources*.
+Edit a dashboard → **Add card** → search **Gas Invoices**, or use YAML:
+
+```yaml
+type: custom:gas-invoices-card
+# title: My gas   (optional)
+```
+
+The card shows the number of invoices, totals, and the last invoice (m³, €, €/m³, period). It also has a drop zone for PDF/ZIP files and an **Import** button. Uploading requires an administrator account.
 
 ## Options
 
@@ -77,7 +91,7 @@ Invoices contain personal data, such as name, address and personal ID number. Th
 
 Интеграцията прави следното:
 
-- **Качване:** качваш газовите фактури (PDF или ZIP) от Settings → Devices & services → Gas Invoices → **Configure** → **Качи фактури**.
+- **Качване:** качваш газовите фактури с drag & drop в картата `custom:gas-invoices-card`, или като PDF/ZIP от Settings → Devices & services → Gas Invoices → **Configure** → **Качи фактури**.
 - **Разпределение:** консумацията и цената се разпределят по дните от периода на фактурата, според температурите.
 - **Energy таблото:** данните се появяват там като газ консумация и разход.
 - **Поддържани фактури:** засега само от Костинбродгаз, всички формати от 2021 г. насам.

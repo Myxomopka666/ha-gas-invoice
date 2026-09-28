@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 import zipfile
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -44,57 +46,107 @@ MAX_PDF_SIZE = 20 * 1024 * 1024
 
 
 # --------------------------------------------------------------------------- качване
-def save_upload(
-    src: Path, folder: Path, tz: ZoneInfo, texts: dict[str, str]
-) -> tuple[list[str], list[str]]:
-    """Записва качен PDF или ZIP с PDF-и в папката. Всеки PDF се проверява,
-    че е фактура, и се записва като ГГГГ-ММ_<номер>.pdf. Извлеченият текст се
-    добавя в texts (кеша), за да не се парсва повторно при импорта.
-    Връща (добавени номера, грешки). Блокираща функция - за executor."""
-    folder.mkdir(parents=True, exist_ok=True)
-    added: list[str] = []
-    errors: list[str] = []
+RE_SAVED = re.compile(r"^\d{4}-\d{2}_(\d+)\.pdf$", re.I)
 
-    def handle(name: str, data: bytes) -> None:
+
+@dataclass
+class UploadResult:
+    """Резултат от качване. Номерата са номера на фактури."""
+
+    added: list[str] = field(default_factory=list)  # нови за папката
+    updated: list[str] = field(default_factory=list)  # вече бяха качени
+    duplicates: list[str] = field(default_factory=list)  # повторени в това качване
+    errors: list[str] = field(default_factory=list)  # не са фактури / грешни файлове
+
+    @property
+    def saved(self) -> int:
+        return len(self.added) + len(self.updated)
+
+    def merge(self, other: "UploadResult") -> None:
+        self.added += other.added
+        self.updated += other.updated
+        self.duplicates += other.duplicates
+        self.errors += other.errors
+
+    def as_dict(self) -> dict:
+        return {
+            "added": len(self.added),
+            "updated": len(self.updated),
+            "duplicates": len(self.duplicates),
+            "skipped": len(self.errors),
+            "errors": self.errors[:20],
+        }
+
+
+def existing_numbers(folder: Path) -> set[str]:
+    """Номера на фактурите, вече записани в папката (по името ГГГГ-ММ_<номер>.pdf)."""
+    if not folder.is_dir():
+        return set()
+    return {m.group(1) for f in folder.iterdir() if (m := RE_SAVED.match(f.name))}
+
+
+def save_files(
+    items, folder: Path, tz: ZoneInfo, texts: dict[str, str], seen: set[str] | None = None
+) -> UploadResult:
+    """Записва PDF файлове (итерируемо от (име, bytes)) в папката.
+
+    Всеки PDF се проверява, че е фактура, и се записва като ГГГГ-ММ_<номер>.pdf.
+    Извлеченият текст се добавя в texts (кеша), за да не се парсва повторно.
+    seen - номера, вече обработени в същото качване (за броене на дубликати).
+    Блокираща функция - за executor."""
+    folder.mkdir(parents=True, exist_ok=True)
+    before = existing_numbers(folder)
+    seen = set() if seen is None else seen
+    res = UploadResult()
+
+    for name, data in items:
         if len(data) > MAX_PDF_SIZE:
-            errors.append(f"{name}: файлът е твърде голям")
-            return
+            res.errors.append(f"{name}: файлът е твърде голям")
+            continue
         if not data.startswith(b"%PDF"):
-            errors.append(f"{name}: не е PDF файл")
-            return
+            res.errors.append(f"{name}: не е PDF файл")
+            continue
         try:
             text = inv_mod.pdf_lines(io.BytesIO(data))
             inv = inv_mod.parse_text(text, tz, name)
         except Exception as err:  # noqa: BLE001
-            errors.append(f"{name}: не е разпозната фактура ({err})")
-            return
+            res.errors.append(f"{name}: не е разпозната фактура ({err})")
+            continue
+        if inv.number in seen:
+            res.duplicates.append(inv.number)
+            continue
+        seen.add(inv.number)
         target = folder / f"{inv.start.astimezone(tz):%Y-%m}_{inv.number}.pdf"
         target.write_bytes(data)
         st = target.stat()
         texts[f"{target.name}|{st.st_size}|{int(st.st_mtime)}"] = text
-        if inv.number not in added:
-            added.append(inv.number)
+        (res.updated if inv.number in before else res.added).append(inv.number)
+    return res
 
+
+def save_upload(src: Path, folder: Path, tz: ZoneInfo, texts: dict[str, str]) -> UploadResult:
+    """Записва качен PDF или ZIP с PDF-и. Блокираща функция - за executor."""
     with src.open("rb") as f:
         is_pdf = f.read(4) == b"%PDF"
-    if not is_pdf and zipfile.is_zipfile(src):
-        with zipfile.ZipFile(src) as zf:
-            members = [
-                m for m in zf.infolist()
-                if not m.is_dir()
-                and m.filename.lower().endswith(".pdf")
-                and "__MACOSX" not in m.filename
-            ]
-            for m in members[:MAX_ZIP_MEMBERS]:
-                if m.file_size > MAX_PDF_SIZE:
-                    errors.append(f"{m.filename}: файлът е твърде голям")
-                    continue
-                handle(Path(m.filename).name, zf.read(m))
-            if not members:
-                errors.append("ZIP файлът не съдържа PDF-и")
-    else:
-        handle(src.name, src.read_bytes())
-    return added, errors
+    if is_pdf or not zipfile.is_zipfile(src):
+        return save_files([(src.name, src.read_bytes())], folder, tz, texts)
+
+    with zipfile.ZipFile(src) as zf:
+        members = [
+            m for m in zf.infolist()
+            if not m.is_dir()
+            and m.filename.lower().endswith(".pdf")
+            and "__MACOSX" not in m.filename
+        ][:MAX_ZIP_MEMBERS]
+        if not members:
+            return UploadResult(errors=["ZIP файлът не съдържа PDF-и"])
+        big = [m for m in members if m.file_size > MAX_PDF_SIZE]
+        res = save_files(
+            ((Path(m.filename).name, zf.read(m)) for m in members if m not in big),
+            folder, tz, texts,
+        )
+        res.errors += [f"{Path(m.filename).name}: файлът е твърде голям" for m in big]
+        return res
 
 
 # --------------------------------------------------------------------------- импорт
