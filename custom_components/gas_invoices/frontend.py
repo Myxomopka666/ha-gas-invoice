@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.start import async_at_started
@@ -18,14 +17,14 @@ CARD_FILE = "gas-invoices-card.js"
 
 
 async def async_setup_card(hass: HomeAssistant, version: str) -> None:
-    """Сервира JS файла и го регистрира:
-    1) като Lovelace ресурс (dashboards в storage режим - най-надеждно);
-    2) като extra module (резерва, напр. при dashboards в YAML режим)."""
+    """Сервира JS файла и го регистрира като Lovelace ресурс.
+
+    Не ползваме add_extra_js_url: така скриптът се зарежда преди frontend-ът да
+    подмени регистъра на custom елементите (scoped registry) и HA не вижда картата."""
     url = f"{CARD_URL_BASE}/{CARD_FILE}?v={version}"
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_URL_BASE, str(Path(__file__).parent / "www"), False)]
     )
-    add_extra_js_url(hass, url)
 
     async def _register(_hass: HomeAssistant) -> None:
         try:

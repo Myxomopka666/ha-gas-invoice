@@ -44,7 +44,7 @@ from .importer import async_import
 
 from .frontend import async_setup_card
 
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.BUTTON, Platform.SENSOR]

@@ -20,5 +20,5 @@
     "pdfminer.six>=20231228"
   ],
   "single_config_entry": true,
-  "version": "1.1.1"
+  "version": "1.2.0"
 }

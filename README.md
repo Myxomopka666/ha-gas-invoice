@@ -59,6 +59,7 @@ Edit a dashboard → **Add card** → search **Gas Invoices**, or use YAML:
 
 ```yaml
 type: custom:gas-invoices-card
+layout: tiles     # tiles (default) | chips | list
 # title: My gas   (optional)
 ```
 
