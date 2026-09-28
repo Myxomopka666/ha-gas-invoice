@@ -171,6 +171,36 @@ data:
 - Temperatures are fetched from Open-Meteo using only your Home Assistant coordinates.
 - Nothing else leaves your Home Assistant.
 
+<a id="roadmap"></a>
+
+## 🗺️ Roadmap
+
+Ideas and planned improvements. Contributions and feedback are welcome in [issues](https://github.com/Myxomopka666/ha-gas-invoice/issues).
+
+### More suppliers
+Overgas, Citygas, Aresgas, Sofiagas and others, driven by [supplier requests](#-add-your-supplier).
+
+### Any currency (GBP, USD, CNY, …)
+Today the cost statistic is written in EUR, and BGN invoices are converted at the fixed euro rate. Planned:
+
+- Each supplier parser reports the amount **together with its currency**, read from the invoice.
+- The cost statistic uses the **currency configured in Home Assistant** (*Settings → System → General → Currency*), which the Energy dashboard also uses.
+- If the invoice currency matches Home Assistant's currency, amounts are written as they are, with no conversion.
+- If they differ, the amount is converted with the **historical exchange rate on the invoice date** (ECB reference rates), or with a fixed rate for pegged currencies. The rate used is shown in the import summary.
+- A warning is shown when the currency on an invoice can't be determined.
+
+### Hourly or daily data from the invoice
+Some suppliers (smart meters, detailed statements) include consumption **per day or per hour**. The data model already supports this: an invoice is a list of measured segments, and today one segment usually covers a whole month. Planned:
+
+- Parsers return **one segment per day or hour** when the invoice provides it.
+- These values are written **as they are**. Temperature-based distribution is used only for periods the invoice doesn't break down (for example, spreading one day over its hours).
+- **Per-segment cost** for time-of-use tariffs (day/night prices), instead of one average €/m³ per invoice.
+- The import summary shows which periods are measured and which are estimated.
+
+### Other ideas
+- Import from CSV/Excel exports of supplier portals.
+- Import from e-mail (IMAP) automatically when a new invoice arrives.
+
 ## 🛠️ Contributing
 
 Parsers live in `custom_components/gas_invoices/suppliers/`. Each module defines `KEY`, `NAME`, `detect(text) -> bool` and `parse(text, tz, filename) -> Invoice`, and is registered in `suppliers/__init__.py`. They have no Home Assistant dependencies, so they are easy to test: add tests with anonymised text in `tests/` and run `pytest`.
@@ -185,6 +215,7 @@ Parsers live in `custom_components/gas_invoices/suppliers/`. Each module defines
 - **Разпределение:** консумацията и цената се разпределят по дните от периода на фактурата, според температурите.
 - **Energy таблото:** Gas → „Газ консумация (фактури)“, за цената „Газ разход (фактури)“. Валутата в HA трябва да е евро.
 - **Поддържани фактури:** засега Костинбродгаз, всички формати от 2021 г. насам.
+- **Планирано:** още доставчици, фактури във всяка валута (GBP, USD, CNY…) и използване на дневни или часови данни, ако фактурата ги съдържа. Виж [Roadmap](#roadmap).
 - **Друг доставчик?** Configure → **Диагностика на фактура** дава текста на фактурата без лични данни. Изпрати го в [заявка за нов доставчик](https://github.com/Myxomopka666/ha-gas-invoice/issues/new?template=new_supplier.yml). **Не прикачвай PDF-а.**
 
 ## License
