@@ -27,7 +27,7 @@ def detect(text: str) -> bool:
 def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
     m = RE_NUMBER.search(text)
     if not m:
-        raise ValueError("не намирам номер на фактура")
+        raise ValueError("invoice number not found")
     inv = Invoice(number=m.group(1), date=m.group(2), file=filename, supplier=KEY)
 
     for m in RE_METER.finditer(text):
@@ -36,7 +36,7 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
             Segment(meter or "", local_dt(d1, tz), local_dt(d2, tz), num(r1), num(r2), num(billed))
         )
     if not inv.segments:
-        raise ValueError("не намирам таблицата с показанията на разходомера")
+        raise ValueError("meter reading table not found")
 
     if c := RE_CALORIFIC.search(text):
         inv.calorific = num(c.group(1))
@@ -58,5 +58,5 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
                 inv.total_bgn = num(m.group(1))
     to_eur(inv)
     if inv.total is None:
-        raise ValueError("не намирам сума за плащане")
+        raise ValueError("amount due not found")
     return inv

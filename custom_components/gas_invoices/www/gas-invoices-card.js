@@ -85,6 +85,20 @@ const fmt = (v, d = 2, lang) =>
 const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
+// currency code -> symbol in the user's locale (GBP -> £, EUR -> €)
+const curSym = (code, lang) => {
+  if (!code) return "";
+  try {
+    return (
+      new Intl.NumberFormat(lang, { style: "currency", currency: code, currencyDisplay: "narrowSymbol" })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value || code
+    );
+  } catch (e) {
+    return code;
+  }
+};
+
 class GasInvoicesCard extends HTMLElement {
   setConfig(config) {
     this._config = config || {};
@@ -140,8 +154,8 @@ class GasInvoicesCard extends HTMLElement {
       const u = a.unit_of_measurement;
       if (a.total_m3 !== undefined && a.gaps !== undefined) out.invoices = s;
       else if (a.number !== undefined && u === "m³") out.m3 = s;
-      else if (a.number !== undefined && u === "EUR") out.cost = s;
-      else if (a.number !== undefined && u === "EUR/m³") out.price = s;
+      else if (a.number !== undefined && a.device_class === "monetary") out.cost = s;
+      else if (a.number !== undefined && typeof u === "string" && u.endsWith("/m³")) out.price = s;
     }
     if (this._config.entity && h.states[this._config.entity]) out.invoices = h.states[this._config.entity];
     return out;
@@ -220,20 +234,23 @@ class GasInvoicesCard extends HTMLElement {
     const inv = e.invoices?.attributes || {};
     const lang = this._hass.locale?.language || this._hass.language;
     const n = (v, d = 2) => fmt(v, d, lang);
+    const sym = (c) => curSym(c, lang);
     const date = (s) =>
       s ? new Date(s).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) : "–";
     return {
       found: !!e.invoices,
       count: e.invoices?.state ?? "–",
       totalM3: n(inv.total_m3, 0),
-      totalEur: n(inv.total_eur),
+      totalCost: n(inv.total ?? inv.total_eur),
+      cur: sym(inv.currency || e.cost?.attributes.unit_of_measurement || "EUR"),
       lastM3: n(e.m3?.state, 0),
-      lastEur: n(e.cost?.state),
+      lastCost: n(e.cost?.state),
       price: n(e.price?.state, 3),
       from: date(e.m3?.attributes.from),
       to: date(e.m3?.attributes.to),
       warnings: inv.warnings || [],
       n,
+      sym,
     };
   }
 
@@ -255,7 +272,7 @@ class GasInvoicesCard extends HTMLElement {
     const r = this._result;
     if (!r?.import) return "";
     return `<div class="import-line"><ha-icon icon="mdi:check-circle"></ha-icon>
-      ${this._t.imported}: <b>${r.import.invoices}</b> · <b>${d.n(r.import.total_m3, 0)} m³</b> · <b>${d.n(r.import.total_eur)} €</b></div>`;
+      ${this._t.imported}: <b>${r.import.invoices}</b> · <b>${d.n(r.import.total_m3, 0)} m³</b> · <b>${d.n(r.import.total)} ${d.sym(r.import.currency || "EUR")}</b></div>`;
   }
 
   _errors() {
@@ -344,8 +361,8 @@ class GasInvoicesCard extends HTMLElement {
       <div class="hero">
         <div class="hero-main">
           <div class="hero-label">${t.last}</div>
-          <div class="hero-value">${d.lastEur}<span class="unit"> €</span></div>
-          <div class="hero-sub">${d.lastM3} m³ · ${d.price} €/m³</div>
+          <div class="hero-value">${d.lastCost}<span class="unit"> ${d.cur}</span></div>
+          <div class="hero-sub">${d.lastM3} m³ · ${d.price} ${d.cur}/m³</div>
           <div class="hero-sub muted"><ha-icon icon="mdi:calendar-range"></ha-icon>${d.from} – ${d.to}</div>
         </div>
         <ha-icon class="hero-icon" icon="mdi:fire"></ha-icon>
@@ -353,7 +370,7 @@ class GasInvoicesCard extends HTMLElement {
       <div class="stats">
         <div class="stat"><ha-icon icon="mdi:file-document-multiple-outline"></ha-icon><div><div class="sv">${d.count}</div><div class="sl">${t.invoices}</div></div></div>
         <div class="stat"><ha-icon icon="mdi:meter-gas-outline"></ha-icon><div><div class="sv">${d.totalM3} m³</div><div class="sl">${t.total}</div></div></div>
-        <div class="stat"><ha-icon icon="mdi:cash-multiple"></ha-icon><div><div class="sv">${d.totalEur} €</div><div class="sl">${t.totalCost}</div></div></div>
+        <div class="stat"><ha-icon icon="mdi:cash-multiple"></ha-icon><div><div class="sv">${d.totalCost} ${d.cur}</div><div class="sl">${t.totalCost}</div></div></div>
       </div>`;
   }
 
@@ -362,8 +379,8 @@ class GasInvoicesCard extends HTMLElement {
     return `
       <div class="grid">
         <div><span class="label">${t.invoices}</span><span class="value">${d.count}</span></div>
-        <div><span class="label">${t.total}</span><span class="value">${d.totalM3} m³ · ${d.totalEur} €</span></div>
-        <div><span class="label">${t.last}</span><span class="value">${d.lastM3} m³ · ${d.lastEur} € · ${d.price} €/m³</span></div>
+        <div><span class="label">${t.total}</span><span class="value">${d.totalM3} m³ · ${d.totalCost} ${d.cur}</span></div>
+        <div><span class="label">${t.last}</span><span class="value">${d.lastM3} m³ · ${d.lastCost} ${d.cur} · ${d.price} ${d.cur}/m³</span></div>
         <div><span class="label">${t.period}</span><span class="value">${d.from} – ${d.to}</span></div>
       </div>`;
   }
@@ -376,9 +393,9 @@ class GasInvoicesCard extends HTMLElement {
       <div class="slist">
         ${row("mdi:file-document-multiple-outline", t.invoices, d.count)}
         ${row("mdi:meter-gas-outline", t.total, `${d.totalM3} m³`)}
-        ${row("mdi:cash-multiple", t.totalCost, `${d.totalEur} €`)}
-        ${row("mdi:fire", t.last, `${d.lastM3} m³ · ${d.lastEur} €`)}
-        ${row("mdi:tag-outline", t.price, `${d.price} €/m³`)}
+        ${row("mdi:cash-multiple", t.totalCost, `${d.totalCost} ${d.cur}`)}
+        ${row("mdi:fire", t.last, `${d.lastM3} m³ · ${d.lastCost} ${d.cur}`)}
+        ${row("mdi:tag-outline", t.price, `${d.price} ${d.cur}/m³`)}
         ${row("mdi:calendar-range", t.period, `${d.from} – ${d.to}`)}
       </div>`;
   }

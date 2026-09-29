@@ -34,6 +34,6 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
     sup = detect(text)
     if sup is None:
         raise UnknownSupplierError(
-            "непознат доставчик (поддържани: " + ", ".join(supported_names()) + ")"
+            "unknown supplier (supported: " + ", ".join(supported_names()) + ")"
         )
     return sup.parse(text, tz, filename)

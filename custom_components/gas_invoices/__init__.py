@@ -117,7 +117,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def handle_import(call: ServiceCall) -> ServiceResponse:
         entries = hass.config_entries.async_loaded_entries(DOMAIN)
         if not entries:
-            raise HomeAssistantError("Gas Invoices не е конфигурирана")
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="not_configured")
         return await async_run_import(hass, entries[0], dict(call.data))
 
     hass.services.async_register(
@@ -134,10 +134,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         if not path.is_absolute():
             entries = hass.config_entries.async_loaded_entries(DOMAIN)
             if not entries:
-                raise HomeAssistantError("Gas Invoices не е конфигурирана")
+                raise HomeAssistantError(translation_domain=DOMAIN, translation_key="not_configured")
             path = Path(entry_options(entries[0])[CONF_FOLDER]) / path
         if not await hass.async_add_executor_job(path.is_file):
-            raise HomeAssistantError(f"Файлът {path} не съществува")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="file_missing",
+                translation_placeholders={"file": str(path)},
+            )
         data = await hass.async_add_executor_job(path.read_bytes)
         return await hass.async_add_executor_job(
             debug_pdf, data, path.name, ZoneInfo(hass.config.time_zone), call.data.get(CONF_MASK, [])
@@ -168,7 +172,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GasInvoicesConfigEntry) 
             try:
                 await async_run_import(hass, entry)
             except HomeAssistantError as err:
-                _LOGGER.warning("Нощният импорт не успя: %s", err)
+                _LOGGER.warning("Nightly import failed: %s", err)
 
         entry.async_on_unload(
             async_track_time_change(hass, _daily, hour=DAILY_AT[0], minute=DAILY_AT[1], second=0)

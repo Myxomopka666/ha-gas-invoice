@@ -9,7 +9,7 @@ SIGNAL_UPDATED = f"{DOMAIN}_updated_{{}}"  # .format(entry_id)
 
 STAT_M3 = f"{DOMAIN}:consumption"
 STAT_KWH = f"{DOMAIN}:energy"
-STAT_EUR = f"{DOMAIN}:cost"
+STAT_COST = f"{DOMAIN}:cost"
 
 CONF_FOLDER = "folder"
 CONF_BASE_TEMP = "base_temp"

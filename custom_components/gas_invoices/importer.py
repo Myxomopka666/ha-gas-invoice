@@ -34,7 +34,7 @@ from .const import (
     CONF_RESET,
     CONF_WEATHER,
     DOMAIN,
-    STAT_EUR,
+    STAT_COST,
     STAT_KWH,
     STAT_M3,
 )
@@ -101,21 +101,21 @@ def save_files(
 
     for name, data in items:
         if len(data) > MAX_PDF_SIZE:
-            res.errors.append(f"{name}: файлът е твърде голям")
+            res.errors.append(f"{name}: file is too large")
             continue
         if not data.startswith(b"%PDF"):
-            res.errors.append(f"{name}: не е PDF файл")
+            res.errors.append(f"{name}: not a PDF file")
             continue
         try:
             text = inv_mod.pdf_lines(io.BytesIO(data))
             inv = inv_mod.parse_text(text, tz, name)
         except inv_mod.UnknownSupplierError:
             res.errors.append(
-                f"{name}: доставчикът още не се поддържа - виж Configure → Диагностика на фактура"
+                f"{name}: supplier not supported yet - see Configure → Invoice diagnostics"
             )
             continue
         except Exception as err:  # noqa: BLE001
-            res.errors.append(f"{name}: не е разпозната фактура ({err})")
+            res.errors.append(f"{name}: not recognised as an invoice ({err})")
             continue
         if inv.number in seen:
             res.duplicates.append(inv.number)
@@ -144,22 +144,26 @@ def save_upload(src: Path, folder: Path, tz: ZoneInfo, texts: dict[str, str]) ->
             and "__MACOSX" not in m.filename
         ][:MAX_ZIP_MEMBERS]
         if not members:
-            return UploadResult(errors=["ZIP файлът не съдържа PDF-и"])
+            return UploadResult(errors=["the ZIP file contains no PDFs"])
         big = [m for m in members if m.file_size > MAX_PDF_SIZE]
         res = save_files(
             ((Path(m.filename).name, zf.read(m)) for m in members if m not in big),
             folder, tz, texts,
         )
-        res.errors += [f"{Path(m.filename).name}: файлът е твърде голям" for m in big]
+        res.errors += [f"{Path(m.filename).name}: file is too large" for m in big]
         return res
 
 
 # --------------------------------------------------------------------------- импорт
 async def async_import(hass: HomeAssistant, store: Store, opts: dict) -> dict:
-    """Чете всички фактури, разпределя по часове и записва статистиките."""
+    """Reads all invoices, distributes them over hours and writes the statistics."""
     folder = Path(opts[CONF_FOLDER])
     if not await hass.async_add_executor_job(folder.is_dir):
-        raise HomeAssistantError(f"Папката {folder} не съществува или не е достъпна")
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="folder_missing",
+            translation_placeholders={"folder": str(folder)},
+        )
 
     tz = ZoneInfo(hass.config.time_zone)
     warnings: list[str] = []
@@ -171,7 +175,19 @@ async def async_import(hass: HomeAssistant, store: Store, opts: dict) -> dict:
         inv_mod.load_invoices, folder, tz, warnings, texts
     )
     if not invoices:
-        raise HomeAssistantError(f"Няма разчетени фактури в {folder}")
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="no_invoices",
+            translation_placeholders={"folder": str(folder)},
+        )
+    currencies = sorted({i.currency for i in invoices})
+    if len(currencies) > 1:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="mixed_currency",
+            translation_placeholders={"currencies": ", ".join(currencies)},
+        )
+    currency = currencies[0]
 
     gaps = inv_mod.find_gaps(invoices, warnings)
     if opts[CONF_FILL_GAPS]:
@@ -189,11 +205,13 @@ async def async_import(hass: HomeAssistant, store: Store, opts: dict) -> dict:
         inv_mod.distribute, invoices, temps, float(opts[CONF_BASE_TEMP]), base_load, warnings
     )
 
-    if hass.config.currency != "EUR":
-        warnings.append(f"Валутата в HA е {hass.config.currency}, а цените се записват в EUR")
+    if hass.config.currency != currency:
+        warnings.append(
+            f"Home Assistant currency is {hass.config.currency}, but the invoices are in {currency}"
+        )
 
     if opts.get(CONF_RESET):
-        get_instance(hass).async_clear_statistics([STAT_M3, STAT_KWH, STAT_EUR])
+        get_instance(hass).async_clear_statistics([STAT_M3, STAT_KWH, STAT_COST])
     bg = (hass.config.language or "").startswith("bg")
     names = (
         ("Газ консумация (фактури)", "Газ енергия (фактури)", "Газ разход (фактури)")
@@ -202,7 +220,7 @@ async def async_import(hass: HomeAssistant, store: Store, opts: dict) -> dict:
     )
     _add_stats(hass, STAT_M3, names[0], "m³", "volume", hourly, 0)
     _add_stats(hass, STAT_KWH, names[1], "kWh", "energy", hourly, 1)
-    _add_stats(hass, STAT_EUR, names[2], "EUR", None, hourly, 2)
+    _add_stats(hass, STAT_COST, names[2], currency, None, hourly, 2)
 
     real = [i for i in invoices if not i.estimated]
     result = {
@@ -212,8 +230,10 @@ async def async_import(hass: HomeAssistant, store: Store, opts: dict) -> dict:
         "hours": len(hourly),
         "from": invoices[0].start.astimezone(tz).isoformat(),
         "to": invoices[-1].end.astimezone(tz).isoformat(),
-        "total_m3": round(sum(i.m3 for i in invoices), 1),
-        "total_eur": round(sum(i.total_eur for i in invoices), 2),
+        # from the hourly values, so overlapping invoices are not counted twice
+        "total_m3": round(sum(r[0] for r in hourly.values()), 1),
+        "total": round(sum(r[2] for r in hourly.values()), 2),
+        "currency": currency,
         "last_invoice": real[-1].as_dict(tz),
         "gaps": [g.as_dict(tz) for g in gaps],
         "gaps_filled": bool(opts[CONF_FILL_GAPS]),
@@ -225,8 +245,8 @@ async def async_import(hass: HomeAssistant, store: Store, opts: dict) -> dict:
     for w in warnings:
         _LOGGER.warning(w)
     _LOGGER.info(
-        "Записани %s фактури (%s часа), %s m³, %s EUR",
-        result["invoices"], result["hours"], result["total_m3"], result["total_eur"],
+        "Imported %s invoices (%s hours), %s m³, %s %s",
+        result["invoices"], result["hours"], result["total_m3"], result["total"], currency,
     )
     return result
 
@@ -310,7 +330,7 @@ def debug_pdf(data: bytes, name: str, tz: ZoneInfo, extra_mask: list[str] | None
     from .redact import redact
 
     if not data.startswith(b"%PDF"):
-        return {"file": name, "error": "не е PDF файл"}
+        return {"file": name, "error": "not a PDF file"}
     text = inv_mod.pdf_lines(io.BytesIO(data))
     red, masked = redact(text, extra_mask)
     sup = suppliers.detect(text)

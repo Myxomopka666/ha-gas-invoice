@@ -65,7 +65,7 @@ class GasInvoicesUploadView(HomeAssistantView):
 
         entries = hass.config_entries.async_loaded_entries(DOMAIN)
         if not entries:
-            return self.json_message("Gas Invoices не е конфигурирана", 400)
+            return self.json_message("Gas Invoices is not configured", 400)
         entry = entries[0]
 
         items: list[tuple[str, bytes]] = []
@@ -77,7 +77,7 @@ class GasInvoicesUploadView(HomeAssistantView):
             elif part.name == "import":
                 do_import = (await part.text()).strip() not in ("0", "false", "")
         if not items:
-            return self.json_message("Няма файлове", 400)
+            return self.json_message("No files", 400)
 
         folder = Path(entry_options(entry)[CONF_FOLDER])
         tz = ZoneInfo(hass.config.time_zone)
@@ -93,7 +93,7 @@ class GasInvoicesUploadView(HomeAssistantView):
             try:
                 result = await async_run_import(hass, entry)
                 body["import"] = {
-                    k: result[k] for k in ("invoices", "total_m3", "total_eur", "from", "to")
+                    k: result[k] for k in ("invoices", "total_m3", "total", "currency", "from", "to")
                 } | {"warnings": result["warnings"][:10], "gaps": len(result["gaps"])}
             except HomeAssistantError as err:
                 body["error"] = str(err)

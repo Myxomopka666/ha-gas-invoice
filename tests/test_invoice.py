@@ -1,5 +1,7 @@
 """Тестове на парсера с анонимизиран текст (без истински лични данни)."""
 import dataclasses
+import json
+import re
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -330,3 +332,33 @@ def test_redact_keeps_outfox_data():
     out, _ = redact.redact(OUTFOX)
     i = inv.parse_text(out, LON)
     assert i.number == "12345678" and i.m3 == 12.0 and i.total == 17.52 and i.fixed_cost == 9.06
+
+
+BASE = Path(__file__).parents[1] / "custom_components" / "gas_invoices"
+
+
+def _load(name):
+    return json.loads((BASE / name).read_text(encoding="utf-8"))
+
+
+def _keys(d, p=""):
+    out = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            out |= _keys(v, f"{p}{k}.")
+        else:
+            out[p + k] = set(re.findall(r"\{(\w+)\}", v))
+    return out
+
+
+def test_translations_match():
+    strings = _load("strings.json")
+    assert _load("translations/en.json") == strings
+    assert _keys(_load("translations/bg.json")) == _keys(strings)  # same keys and placeholders
+
+
+def test_parser_errors_in_english():
+    with pytest.raises(inv.UnknownSupplierError, match="unknown supplier"):
+        inv.parse_text("nothing here", TZ)
+    with pytest.raises(ValueError, match="invoice number not found"):
+        inv.parse_text("КОСТИНБРОДГАЗ ООД", TZ)

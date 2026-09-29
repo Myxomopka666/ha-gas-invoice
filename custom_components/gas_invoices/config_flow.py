@@ -123,27 +123,32 @@ class GasInvoicesOptionsFlow(OptionsFlow):
             if not res.saved:
                 errors["base"] = "no_invoices"
                 placeholders["details"] = "\n".join(res.errors[:10]) or (
-                    f"дубликати: {len(res.duplicates)}"
+                    f"duplicates: {len(res.duplicates)}"
                 )
             else:
                 await store.async_save(cache)
+                counts = {
+                    "added": str(len(res.added)),
+                    "updated": str(len(res.updated)),
+                    "duplicates": str(len(res.duplicates)),
+                    "skipped": str(len(res.errors)),
+                    "problems": "\n".join(res.errors[:10]) or "-",
+                }
                 try:
                     result = await async_run_import(self.hass, entry)
-                    summary = (
-                        f"{result['invoices']} фактури, {result['total_m3']} m³, "
-                        f"{result['total_eur']} €"
-                    )
                 except HomeAssistantError as err:
-                    summary = f"импортът не успя: {err}"
+                    return self.async_abort(
+                        reason="uploaded_import_failed",
+                        description_placeholders={**counts, "error": str(err)},
+                    )
                 return self.async_abort(
                     reason="uploaded",
                     description_placeholders={
-                        "added": str(len(res.added)),
-                        "updated": str(len(res.updated)),
-                        "duplicates": str(len(res.duplicates)),
-                        "skipped": str(len(res.errors)),
-                        "summary": summary,
-                        "problems": "\n".join(res.errors[:10]) or "-",
+                        **counts,
+                        "invoices": str(result["invoices"]),
+                        "m3": str(result["total_m3"]),
+                        "cost": str(result["total"]),
+                        "currency": result["currency"],
                     },
                 )
 
@@ -170,28 +175,34 @@ class GasInvoicesOptionsFlow(OptionsFlow):
             res = await self.hass.async_add_executor_job(
                 _process_debug, self.hass, user_input[CONF_FILE], tz, extra
             )
-            if res.get("parsed"):
-                p = res["parsed"]
-                status = (
-                    f"✅ Разпозната фактура от **{res['supplier']}**: № {p['number']}, "
-                    f"{p['m3']} m³, {p['eur']} €. Тя вече се поддържа - качи я от „Качи фактури“."
-                )
-            elif res.get("supported"):
-                status = f"⚠️ Доставчикът **{res['supplier']}** се поддържа, но фактурата не се разчита: {res.get('error')}"
-            else:
-                status = "❓ Доставчикът още не се поддържа."
             text = res.get("text", "")
             if len(text) > 6000:
-                text = text[:6000] + "\n… (съкратено)"
-            return self.async_abort(
-                reason="debug",
-                description_placeholders={
-                    "status": status,
-                    "masked": str(res.get("masked", 0)),
-                    "text": text or res.get("error", ""),
-                    "issue_url": ISSUE_URL,
-                },
-            )
+                text = text[:6000] + "\n… (truncated)"
+            common = {
+                "masked": str(res.get("masked", 0)),
+                "text": text or res.get("error", ""),
+                "issue_url": ISSUE_URL,
+            }
+            if p := res.get("parsed"):
+                return self.async_abort(
+                    reason="debug_parsed",
+                    description_placeholders={
+                        **common,
+                        "supplier": res["supplier"],
+                        "number": p["number"],
+                        "m3": str(p["m3"]),
+                        "cost": str(p["cost"]),
+                        "currency": p["currency"],
+                    },
+                )
+            if res.get("supported"):
+                return self.async_abort(
+                    reason="debug_unreadable",
+                    description_placeholders={
+                        **common, "supplier": res["supplier"], "error": str(res.get("error")),
+                    },
+                )
+            return self.async_abort(reason="debug_unsupported", description_placeholders=common)
 
         return self.async_show_form(
             step_id="debug",

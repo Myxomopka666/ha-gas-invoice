@@ -31,7 +31,7 @@ async def async_setup_card(hass: HomeAssistant, version: str) -> None:
             await _async_register_resource(hass, url)
         except Exception:  # noqa: BLE001 - картата е удобство, не бива да чупи интеграцията
             _LOGGER.warning(
-                "Не успях да добавя картата в Lovelace ресурсите. Добави ръчно: %s (JavaScript module)",
+                "Could not add the card to the Lovelace resources. Add it manually: %s (JavaScript module)",
                 url,
                 exc_info=True,
             )
@@ -53,7 +53,7 @@ async def _async_register_resource(hass: HomeAssistant, url: str) -> None:
         mode, resources = getattr(ll, "resource_mode", None), getattr(ll, "resources", None)
     if resources is None or mode != "storage":
         _LOGGER.info(
-            "Lovelace ресурсите са в YAML режим - добави ръчно: url: %s, type: module", url
+            "Lovelace resources are in YAML mode - add manually: url: %s, type: module", url
         )
         return
 
@@ -66,8 +66,8 @@ async def _async_register_resource(hass: HomeAssistant, url: str) -> None:
         if str(item.get("url", "")).split("?")[0] == base:
             if item["url"] != url:
                 await resources.async_update_item(item["id"], {"res_type": "module", "url": url})
-                _LOGGER.info("Обновен Lovelace ресурс: %s", url)
+                _LOGGER.info("Updated Lovelace resource: %s", url)
             return
 
     await resources.async_create_item({"res_type": "module", "url": url})
-    _LOGGER.info("Добавен Lovelace ресурс: %s", url)
+    _LOGGER.info("Added Lovelace resource: %s", url)

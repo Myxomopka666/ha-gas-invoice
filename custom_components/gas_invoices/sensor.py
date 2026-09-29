@@ -24,10 +24,15 @@ from .entity import GasInvoicesEntity
 class GasSensorDescription(SensorEntityDescription):
     value: Callable[[dict], Any]
     attrs: Callable[[dict], dict] | None = None
+    unit: Callable[[dict], str] | None = None  # unit that depends on the data (currency)
 
 
 def _last(r: dict) -> dict:
     return r.get("last_invoice") or {}
+
+
+def _currency(r: dict) -> str:
+    return r.get("currency") or _last(r).get("currency") or "EUR"
 
 
 def _invoice_attrs(r: dict) -> dict:
@@ -55,17 +60,17 @@ SENSORS = (
     GasSensorDescription(
         key="last_cost",
         device_class=SensorDeviceClass.MONETARY,
-        native_unit_of_measurement="EUR",
         suggested_display_precision=2,
-        value=lambda r: _last(r).get("eur"),
+        value=lambda r: _last(r).get("cost", _last(r).get("eur")),
+        unit=_currency,
         attrs=_invoice_attrs,
     ),
     GasSensorDescription(
         key="last_price",
-        native_unit_of_measurement="EUR/m³",
         suggested_display_precision=3,
         icon="mdi:cash",
-        value=lambda r: _last(r).get("eur_per_m3"),
+        value=lambda r: _last(r).get("price_per_m3", _last(r).get("eur_per_m3")),
+        unit=lambda r: f"{_currency(r)}/m³",
         attrs=_invoice_attrs,
     ),
     GasSensorDescription(
@@ -77,7 +82,8 @@ SENSORS = (
             "from": r.get("from"),
             "to": r.get("to"),
             "total_m3": r.get("total_m3"),
-            "total_eur": r.get("total_eur"),
+            "total": r.get("total", r.get("total_eur")),
+            "currency": _currency(r),
             "gaps": r.get("gaps"),
             "warnings": r.get("warnings"),
             "folder": r.get("folder"),
@@ -116,6 +122,12 @@ class GasSensor(GasInvoicesEntity, SensorEntity):
     @property
     def _result(self) -> dict:
         return self._entry.runtime_data.last_result or {}
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        if self.entity_description.unit is not None:
+            return self.entity_description.unit(self._result)
+        return super().native_unit_of_measurement
 
     @property
     def native_value(self):
