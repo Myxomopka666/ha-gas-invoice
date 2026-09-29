@@ -128,6 +128,15 @@ class GasInvoicesCard extends HTMLElement {
     return this._config?.layout === "list" ? 6 : 5;
   }
 
+  // Sections view (HA >= 2024.11): 12-column grid, ~56px rows. Full width by
+  // default, resizable down to a compact minimum; height follows the content.
+  getGridOptions() {
+    const layout = this._config?.layout || "tiles";
+    const opts = { columns: 12, min_columns: layout === "tiles" ? 6 : 4, rows: "auto" };
+    opts.min_rows = layout === "tiles" ? 4 : layout === "chips" ? 3 : 4;
+    return opts;
+  }
+
   static getStubConfig() {
     return { layout: "tiles" };
   }
@@ -456,7 +465,7 @@ class GasInvoicesCard extends HTMLElement {
 
 const STYLES = `
   :host { --gi-accent: var(--primary-color); --gi-soft: color-mix(in srgb, var(--primary-color) 8%, transparent); }
-  ha-card { padding: 16px; }
+  ha-card { padding: 16px; container-type: inline-size; }
   ha-icon { --mdc-icon-size: 20px; }
   .head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px; }
   .title { display:flex; align-items:center; gap:8px; min-width:0; }
@@ -541,7 +550,8 @@ const STYLES = `
   .lval { font-weight:700; min-width:2.5em; text-align:right; padding:1px 8px; border-radius:10px;
           background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); }
 
-  @media (max-width: 450px) {
+  /* react to the card's own width (sections view), not the viewport */
+  @container (max-width: 450px) {
     .grid { grid-template-columns: 1fr; }
     .stats { grid-template-columns: 1fr; }
     .rtiles { grid-template-columns: repeat(2, 1fr); }
