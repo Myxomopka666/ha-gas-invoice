@@ -105,10 +105,50 @@ def load_invoices(
             if key not in used:
                 del text_cache[key]
     invs = sorted(found.values(), key=lambda i: i.start)
-    for a, b in zip(invs, invs[1:]):
-        if b.start < a.end:
-            warnings.append(f"застъпване на периодите: {a.number} и {b.number}")
-    return invs
+    return resolve_overlaps(invs, warnings)
+
+
+def _issued(inv: Invoice) -> datetime:
+    try:
+        return datetime.strptime(inv.date, "%d-%m-%Y")
+    except ValueError:
+        return datetime.min
+
+
+def resolve_overlaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
+    """Overlapping invoices (invs sorted by start):
+    - actual readings beat an estimated reading: the estimated invoice is dropped;
+    - otherwise the later issue date wins the overlapping period: the older
+      invoice is dropped if fully covered, else it keeps only the other hours."""
+    drop: set[int] = set()
+    for i, a in enumerate(invs):
+        for j in range(i + 1, len(invs)):
+            b = invs[j]
+            if b.start >= a.end:
+                break
+            if i in drop or j in drop:
+                continue
+            if a.estimated_read != b.estimated_read:
+                est, keep = (i, b) if a.estimated_read else (j, a)
+                drop.add(est)
+                warnings.append(
+                    f"{invs[est].number}: estimated reading replaced by invoice {keep.number}"
+                )
+                continue
+            if (_issued(a), a.start) <= (_issued(b), b.start):
+                old_i, old, new = i, a, b
+            else:
+                old_i, old, new = j, b, a
+            if new.start <= old.start and new.end >= old.end:
+                drop.add(old_i)
+                warnings.append(f"{old.number}: replaced by newer invoice {new.number}")
+            else:
+                start, end = max(new.start, old.start), min(new.end, old.end)
+                old.superseded.append((start, end))
+                warnings.append(
+                    f"{old.number}: {start:%d.%m.%Y} - {end:%d.%m.%Y} replaced by newer invoice {new.number}"
+                )
+    return [x for k, x in enumerate(invs) if k not in drop]
 
 
 def find_gaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
@@ -215,6 +255,8 @@ def distribute(
             sw = sum(weights)
 
             for h, f, w in zip(hours, frac, weights):
+                if any(s <= h < e for s, e in inv.superseded):
+                    continue
                 m3 = base_total * f / total_frac + heat_total * w / sw
                 row = out.setdefault(h, [0.0, 0.0, 0.0])
                 row[0] += m3

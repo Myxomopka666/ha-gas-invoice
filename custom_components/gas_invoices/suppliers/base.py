@@ -37,6 +37,7 @@ class Invoice:
     estimated_read: bool = False  # the supplier billed an estimated meter reading
     supplier: str = ""
     extras: dict = field(default_factory=dict)  # supplier-specific details, informational only
+    superseded: list[tuple[datetime, datetime]] = field(default_factory=list)  # UTC windows taken over by a newer invoice
 
     @property
     def m3(self) -> float:

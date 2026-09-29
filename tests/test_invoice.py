@@ -1,4 +1,5 @@
 """Тестове на парсера с анонимизиран текст (без истински лични данни)."""
+import dataclasses
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -167,3 +168,53 @@ def test_gap_estimates_fixed_cost_per_day():
     gap = inv.find_gaps([a, b], [])[0]
     assert gap.number == "GAP" and gap.fixed_cost == pytest.approx(28, abs=0.05)
     assert gap.currency == "EUR"
+
+
+def _shifted(base, number, date, days, m3, total):
+    """An invoice like base, moved by `days`, with an even m3 over its period."""
+    s = base.segments[0]
+    seg = inv.Segment("", s.start + timedelta(days=days), s.end + timedelta(days=days), 0, m3, m3)
+    return inv.Invoice(number=number, date=date, file="", segments=[seg], total=total)
+
+
+def test_actual_invoice_replaces_estimated():
+    actual = inv.parse_text(EUR_ONLY, TZ)
+    est = dataclasses.replace(inv.parse_text(EUR_ONLY, TZ), number="0100000009", estimated_read=True)
+    w = []
+    out = inv.resolve_overlaps([est, actual], w)
+    assert out == [actual] and "0100000009" in w[0]
+
+
+def test_reissued_invoice_replaces_older_completely():
+    old = inv.parse_text(EUR_ONLY, TZ)  # issued 09-02-2026
+    new = dataclasses.replace(old, number="0100000009", date="20-02-2026", total=150.0)
+    w = []
+    assert inv.resolve_overlaps([old, new], w) == [new] and "0100000001" in w[0]
+
+
+def test_newer_invoice_wins_partial_overlap():
+    old = inv.parse_text(EUR_ONLY, TZ)  # 01.01-01.02, issued 09-02-2026
+    new = _shifted(old, "0100000009", "20-02-2026", 14, 100.0, 50.0)  # 15.01-15.02
+    out = inv.resolve_overlaps([old, new], [])
+    assert out == [old, new] and old.superseded == [(new.start, old.end)] and not new.superseded
+    hourly = inv.distribute(out, None, 18.0, 0.0, [])
+    n_old = len(list(inv.hour_range(old.start, old.end)))
+    n_new = len(list(inv.hour_range(new.start, new.end)))
+    before = new.start - timedelta(hours=1)
+    assert hourly[before][0] == pytest.approx(274 / n_old)  # only the old invoice
+    assert hourly[new.start][0] == pytest.approx(100 / n_new)  # only the new invoice
+
+
+def test_newer_issue_date_wins_even_for_earlier_period():
+    later_period = _shifted(inv.parse_text(EUR_ONLY, TZ), "0100000008", "20-02-2026", 14, 100.0, 50.0)
+    correction = dataclasses.replace(inv.parse_text(EUR_ONLY, TZ), date="25-02-2026")  # 01.01-01.02
+    inv.resolve_overlaps([correction, later_period], [])
+    assert later_period.superseded == [(later_period.start, correction.end)]
+    assert not correction.superseded
+
+
+def test_touching_invoices_do_not_overlap():
+    a = inv.parse_text(EUR_ONLY, TZ)
+    b = _shifted(a, "0100000009", "20-03-2026", 31, 100.0, 50.0)  # starts exactly at a.end
+    w = []
+    assert inv.resolve_overlaps([a, b], w) == [a, b] and not w and not a.superseded
