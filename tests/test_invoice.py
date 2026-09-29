@@ -218,3 +218,40 @@ def test_touching_invoices_do_not_overlap():
     b = _shifted(a, "0100000009", "20-03-2026", 31, 100.0, 50.0)  # starts exactly at a.end
     w = []
     assert inv.resolve_overlaps([a, b], w) == [a, b] and not w and not a.superseded
+
+
+def _span(number, date, start, end, m3=100.0, estimated_read=False, reading0=0.0):
+    """An invoice with one segment between two dates (day of month, 2026)."""
+    from datetime import datetime
+
+    def at(d):
+        return datetime(2026, d[0], d[1], tzinfo=TZ)
+
+    seg = inv.Segment("", at(start), at(end), reading0, reading0 + m3, m3)
+    return inv.Invoice(
+        number=number, date=date, file="", segments=[seg], total=m3, estimated_read=estimated_read
+    )
+
+
+def test_no_hole_from_window_given_to_a_dropped_invoice():
+    x = _span("X", "01-02-2026", (1, 1), (1, 11), estimated_read=True)
+    a = _span("A", "05-02-2026", (1, 8), (1, 20), estimated_read=True)
+    d = _span("D", "10-02-2026", (1, 15), (2, 1))
+    w = []
+    out = inv.resolve_overlaps([x, a, d], w)
+    assert out == [x, d] and x.superseded == [] and any("A:" in m for m in w)
+
+
+def test_nested_invoice_does_not_create_a_false_gap():
+    old = _span("O", "01-02-2026", (1, 1), (2, 1), reading0=0.0)
+    nested = _span("N", "05-02-2026", (1, 11), (1, 21), reading0=30.0)
+    c = _span("C", "06-02-2026", (2, 1), (3, 1), reading0=100.0)
+    w = []
+    assert inv.find_gaps([old, nested, c], w) == [] and not w
+
+
+def test_equal_issue_date_later_start_wins():
+    a = _span("A", "10-02-2026", (1, 1), (1, 20))
+    b = _span("B", "10-02-2026", (1, 10), (2, 1))
+    inv.resolve_overlaps([a, b], [])
+    assert a.superseded == [(b.start, a.end)] and not b.superseded

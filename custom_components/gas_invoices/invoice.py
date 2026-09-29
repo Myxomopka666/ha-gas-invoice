@@ -116,55 +116,52 @@ def _issued(inv: Invoice) -> datetime:
 
 
 def resolve_overlaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
-    """Overlapping invoices (invs sorted by start):
-    - actual readings beat an estimated reading: the estimated invoice is dropped;
-    - otherwise the later issue date wins the overlapping period: the older
-      invoice is dropped if fully covered, else it keeps only the other hours."""
-    drop: set[int] = set()
-    for i, a in enumerate(invs):
-        for j in range(i + 1, len(invs)):
-            b = invs[j]
-            if b.start >= a.end:
-                break
-            if i in drop or j in drop:
+    """Resolve overlapping invoices (invs sorted by start), keeping their order.
+    1. An estimated-read invoice overlapping an actual-read one is dropped.
+    2. Among the rest, the later issue date (then later start) wins the overlap:
+       a fully covered older invoice is dropped, otherwise it keeps only the
+       hours outside the overlap (`superseded` windows)."""
+    def overlap(a: Invoice, b: Invoice) -> bool:
+        return a.start < b.end and b.start < a.end
+
+    actual = [i for i in invs if not i.estimated_read]
+    kept = []
+    for x in invs:
+        rival = next((a for a in actual if x.estimated_read and overlap(x, a)), None)
+        if rival:
+            warnings.append(f"{x.number}: estimated reading replaced by invoice {rival.number}")
+        else:
+            kept.append(x)
+
+    dropped: set[int] = set()
+    ranked = sorted(kept, key=lambda i: (_issued(i), i.start), reverse=True)
+    for n, old in enumerate(ranked):
+        for new in ranked[:n]:
+            if id(new) in dropped or not overlap(new, old):
                 continue
-            if a.estimated_read != b.estimated_read:
-                est, keep = (i, b) if a.estimated_read else (j, a)
-                drop.add(est)
-                warnings.append(
-                    f"{invs[est].number}: estimated reading replaced by invoice {keep.number}"
-                )
-                continue
-            if (_issued(a), a.start) <= (_issued(b), b.start):
-                old_i, old, new = i, a, b
-            else:
-                old_i, old, new = j, b, a
             if new.start <= old.start and new.end >= old.end:
-                drop.add(old_i)
+                dropped.add(id(old))
                 warnings.append(f"{old.number}: replaced by newer invoice {new.number}")
-            else:
-                start, end = max(new.start, old.start), min(new.end, old.end)
-                old.superseded.append((start, end))
-                warnings.append(
-                    f"{old.number}: {start:%d.%m.%Y} - {end:%d.%m.%Y} replaced by newer invoice {new.number}"
-                )
-    return [x for k, x in enumerate(invs) if k not in drop]
+                break
+            start, end = max(new.start, old.start), min(new.end, old.end)
+            old.superseded.append((start, end))
+            warnings.append(
+                f"{old.number}: {start:%d.%m.%Y} - {end:%d.%m.%Y} replaced by newer invoice {new.number}"
+            )
+    return [i for i in kept if id(i) not in dropped]
 
 
 def find_gaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
     """Gaps between invoices. With the same meter the volume is known from the
     readings; the price and the fixed cost per day are averaged from the
     neighbouring invoices."""
-    gaps = []
-    for a, b in zip(invs, invs[1:]):
-        if b.start <= a.end:
-            continue
+    def gap_between(a: Invoice, b: Invoice) -> Invoice | None:
         sa, sb = a.segments[-1], b.segments[0]
         same_meter = not sa.meter or not sb.meter or sa.meter == sb.meter
         m3 = sb.start_reading - sa.end_reading if same_meter else -1
         if m3 < 0:
             warnings.append(f"gap {a.end:%d.%m.%Y} - {b.start:%d.%m.%Y}: cannot be calculated")
-            continue
+            return None
         price = (a.variable_cost / a.m3 + b.variable_cost / b.m3) / 2 if a.m3 and b.m3 else 0.0
         fixed_per_day = (
             (a.fixed_cost / a.days + b.fixed_cost / b.days) / 2 if a.days and b.days else 0.0
@@ -178,7 +175,17 @@ def find_gaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
         gap.segments.append(
             Segment(sa.meter or sb.meter, a.end, b.start, sa.end_reading, sb.start_reading, m3)
         )
-        gaps.append(gap)
+        return gap
+
+    gaps: list[Invoice] = []
+    if not invs:
+        return gaps
+    a = invs[0]  # the invoice reaching furthest so far
+    for b in invs[1:]:
+        if b.start > a.end and (gap := gap_between(a, b)):
+            gaps.append(gap)
+        if b.end > a.end:
+            a = b
     return gaps
 
 
