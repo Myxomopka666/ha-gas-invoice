@@ -75,6 +75,18 @@ def parse_text(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
     return suppliers.parse(text, tz, filename)
 
 
+def currency_summary(invs: list[Invoice]) -> str:
+    """'EUR (58); GBP (a.pdf)' - file names for currencies with up to 3 invoices,
+    so the odd ones out can be found in the folder."""
+    by_cur: dict[str, list[str]] = {}
+    for i in invs:
+        by_cur.setdefault(i.currency, []).append(i.file)
+    return "; ".join(
+        f"{cur} ({', '.join(files) if len(files) <= 3 else len(files)})"
+        for cur, files in sorted(by_cur.items())
+    )
+
+
 def load_invoices(
     folder: Path, tz: ZoneInfo, warnings: list[str], text_cache: dict[str, str] | None = None
 ) -> list[Invoice]:

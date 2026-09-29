@@ -401,3 +401,10 @@ def test_redact_title_name_does_not_swallow_label():
 def test_redact_uk_phone_numbers():
     out, _ = redact.redact("Call 07700 900123 or +44 20 7946 0958 or 020 7946 0958 today")
     assert "900123" not in out and "7946" not in out
+
+
+def test_currency_summary_names_the_odd_files():
+    bg = [dataclasses.replace(inv.parse_text(EUR_ONLY, TZ), number=str(n), file=f"{n}.pdf") for n in range(5)]
+    uk = inv.parse_text(OUTFOX, LON)
+    uk.file = "2026-09_outfox_test_statement.pdf"
+    assert inv.currency_summary(bg + [uk]) == "EUR (5); GBP (2026-09_outfox_test_statement.pdf)"

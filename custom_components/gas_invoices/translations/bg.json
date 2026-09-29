@@ -164,6 +164,6 @@
     "folder_missing": { "message": "Папката {folder} не съществува или не е достъпна" },
     "no_invoices": { "message": "Няма разчетени фактури в {folder}" },
     "file_missing": { "message": "Файлът {file} не съществува" },
-    "mixed_currency": { "message": "Фактурите са в различни валути ({currencies}). Всички фактури в папката трябва да са в една валута." }
+    "mixed_currency": { "message": "Фактурите са в различни валути: {currencies}. Всички фактури в папката трябва да са в една валута." }
   }
 }

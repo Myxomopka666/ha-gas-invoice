@@ -164,6 +164,6 @@
     "folder_missing": { "message": "Folder {folder} does not exist or is not accessible" },
     "no_invoices": { "message": "No readable invoices in {folder}" },
     "file_missing": { "message": "File {file} does not exist" },
-    "mixed_currency": { "message": "The invoices use different currencies ({currencies}). All invoices in the folder must be in one currency." }
+    "mixed_currency": { "message": "The invoices use different currencies: {currencies}. All invoices in the folder must be in one currency." }
   }
 }

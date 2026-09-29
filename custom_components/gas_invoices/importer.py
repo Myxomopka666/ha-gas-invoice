@@ -185,7 +185,7 @@ async def async_import(hass: HomeAssistant, store: Store, opts: dict) -> dict:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="mixed_currency",
-            translation_placeholders={"currencies": ", ".join(currencies)},
+            translation_placeholders={"currencies": inv_mod.currency_summary(invoices)},
         )
     currency = currencies[0]
 
