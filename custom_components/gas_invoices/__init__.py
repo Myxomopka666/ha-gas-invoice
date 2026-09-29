@@ -1,9 +1,9 @@
-"""Gas Invoices - газ от PDF фактури като статистики за Energy таблото.
+"""Gas Invoices - gas from PDF invoices as statistics for the Energy dashboard.
 
-- Качване на PDF/ZIP от UI (Settings -> Devices & services -> Gas Invoices -> Configure)
-- Бутон "Импорт" и сензори за последната фактура
-- Действие gas_invoices.import_invoices (за автоматизации / Node-RED)
-- Автоматичен импорт всяка нощ (по избор)
+- Upload PDF/ZIP from the UI (Settings -> Devices & services -> Gas Invoices -> Configure)
+- "Import" button and sensors for the latest invoice
+- Action gas_invoices.import_invoices (for automations / Node-RED)
+- Automatic import every night (optional)
 """
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ from .importer import async_import, debug_pdf
 
 from .frontend import async_setup_card
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.BUTTON, Platform.SENSOR]
@@ -92,7 +92,7 @@ def entry_options(entry: ConfigEntry) -> dict:
 async def async_run_import(
     hass: HomeAssistant, entry: GasInvoicesConfigEntry, overrides: dict | None = None
 ) -> dict:
-    """Пуска импорта (един по един) и уведомява сензорите."""
+    """Runs the import (one at a time) and notifies the sensors."""
     data = entry.runtime_data
     async with data.lock:
         try:
@@ -110,14 +110,14 @@ async def async_run_import(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    # Lovelace картата (custom:gas-invoices-card) и endpoint-ът за качване от нея
+    # the Lovelace card (custom:gas-invoices-card) and the upload endpoint for it
     await async_setup_card(hass, VERSION)
     hass.http.register_view(GasInvoicesUploadView())
 
     async def handle_import(call: ServiceCall) -> ServiceResponse:
         entries = hass.config_entries.async_loaded_entries(DOMAIN)
         if not entries:
-            raise HomeAssistantError("Gas Invoices не е конфигурирана")
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="not_configured")
         return await async_run_import(hass, entries[0], dict(call.data))
 
     hass.services.async_register(
@@ -129,15 +129,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
 
     async def handle_debug(call: ServiceCall) -> ServiceResponse:
-        """Текст на фактура със замаскирани лични данни - за заявка за нов доставчик."""
+        """Invoice text with personal data masked - for a new supplier request."""
         path = Path(call.data[CONF_FILE])
         if not path.is_absolute():
             entries = hass.config_entries.async_loaded_entries(DOMAIN)
             if not entries:
-                raise HomeAssistantError("Gas Invoices не е конфигурирана")
+                raise HomeAssistantError(translation_domain=DOMAIN, translation_key="not_configured")
             path = Path(entry_options(entries[0])[CONF_FOLDER]) / path
         if not await hass.async_add_executor_job(path.is_file):
-            raise HomeAssistantError(f"Файлът {path} не съществува")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="file_missing",
+                translation_placeholders={"file": str(path)},
+            )
         data = await hass.async_add_executor_job(path.read_bytes)
         return await hass.async_add_executor_job(
             debug_pdf, data, path.name, ZoneInfo(hass.config.time_zone), call.data.get(CONF_MASK, [])
@@ -168,7 +172,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GasInvoicesConfigEntry) 
             try:
                 await async_run_import(hass, entry)
             except HomeAssistantError as err:
-                _LOGGER.warning("Нощният импорт не успя: %s", err)
+                _LOGGER.warning("Nightly import failed: %s", err)
 
         entry.async_on_unload(
             async_track_time_change(hass, _daily, hour=DAILY_AT[0], minute=DAILY_AT[1], second=0)

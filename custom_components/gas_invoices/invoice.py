@@ -1,9 +1,9 @@
-"""Четене на PDF фактури за газ и разпределяне на консумацията по часове.
+"""Reading PDF gas invoices and distributing consumption by hour.
 
-Парсерите за отделните доставчици са в пакета suppliers.
+The per-supplier parsers are in the suppliers package.
 
-Модулът няма зависимости от Home Assistant (само pdfminer.six), за да може да
-се тества отделно.
+The module has no Home Assistant dependencies (only pdfminer.six), so it can be
+tested on its own.
 """
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ from zoneinfo import ZoneInfo
 
 _LOGGER = logging.getLogger(__name__)
 
-try:  # като част от интеграцията
+try:  # as part of the integration
     from . import suppliers
-except ImportError:  # тестове / самостоятелно ползване
+except ImportError:  # tests / standalone use
     import suppliers  # type: ignore[no-redef]
 
 Invoice = suppliers.Invoice
@@ -27,11 +27,11 @@ DEFAULT_CALORIFIC = suppliers.DEFAULT_CALORIFIC
 UnknownSupplierError = suppliers.UnknownSupplierError
 
 
-# ----------------------------------------------------------------- PDF -> редове текст
+# ----------------------------------------------------------------- PDF -> lines of text
 def pdf_lines(path) -> str:
-    """Текст от PDF, подреден по редове (като pdfplumber), само с pdfminer.six.
+    """Text from a PDF arranged in lines (like pdfplumber), using only pdfminer.six.
 
-    path може да е път или отворен binary файл."""
+    path can be a path or an open binary file."""
     from pdfminer.high_level import extract_pages
     from pdfminer.layout import LTChar
 
@@ -46,7 +46,7 @@ def pdf_lines(path) -> str:
     for page in extract_pages(str(path) if isinstance(path, Path) else path):
         chars: list = []
         walk(page, chars)
-        chars = [c for c in chars if c.size < 30]  # без големия воден знак "ОРИГИНАЛ"
+        chars = [c for c in chars if c.size < 30]  # without the large "ОРИГИНАЛ" watermark
         chars.sort(key=lambda c: (-round(c.y1), c.x0))
         rows: list[list] = []
         for c in chars:
@@ -69,17 +69,29 @@ def pdf_lines(path) -> str:
     return "\n".join(lines_out)
 
 
-# ----------------------------------------------------------------- парсване
+# ----------------------------------------------------------------- parsing
 def parse_text(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
-    """Разпознава доставчика по текста и парсва с неговия парсер."""
+    """Detects the supplier from the text and parses with its parser."""
     return suppliers.parse(text, tz, filename)
+
+
+def currency_summary(invs: list[Invoice]) -> str:
+    """'EUR (58); GBP (a.pdf)' - file names for currencies with up to 3 invoices,
+    so the odd ones out can be found in the folder."""
+    by_cur: dict[str, list[str]] = {}
+    for i in invs:
+        by_cur.setdefault(i.currency, []).append(i.file)
+    return "; ".join(
+        f"{cur} ({', '.join(files) if len(files) <= 3 else len(files)})"
+        for cur, files in sorted(by_cur.items())
+    )
 
 
 def load_invoices(
     folder: Path, tz: ZoneInfo, warnings: list[str], text_cache: dict[str, str] | None = None
 ) -> list[Invoice]:
-    """Чете всички PDF-и в папката. text_cache пази извлечения текст по
-    име+размер+дата, за да не се парсват PDF-ите наново при всяко пускане."""
+    """Reads all PDFs in the folder. text_cache keeps the extracted text by
+    name+size+date, so the PDFs aren't parsed again on every run."""
     found: dict[str, Invoice] = {}
     files = sorted({*folder.glob("*.pdf"), *folder.glob("*.PDF")})
     used: set[str] = set()
@@ -105,39 +117,101 @@ def load_invoices(
             if key not in used:
                 del text_cache[key]
     invs = sorted(found.values(), key=lambda i: i.start)
-    for a, b in zip(invs, invs[1:]):
-        if b.start < a.end:
-            warnings.append(f"застъпване на периодите: {a.number} и {b.number}")
-    return invs
+    return resolve_overlaps(invs, warnings)
+
+
+def _issued(inv: Invoice) -> datetime:
+    try:
+        return datetime.strptime(inv.date, "%d-%m-%Y")
+    except ValueError:
+        return datetime.min
+
+
+def resolve_overlaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
+    """Resolve overlapping invoices (invs sorted by start), keeping their order.
+    1. An estimated-read invoice overlapping an actual-read one is dropped.
+    2. Among the rest, the later issue date (then later start) wins the overlap:
+       a fully covered older invoice is dropped, otherwise it keeps only the
+       hours outside the overlap (`superseded` windows)."""
+    def overlap(a: Invoice, b: Invoice) -> bool:
+        return a.start < b.end and b.start < a.end
+
+    actual = [i for i in invs if not i.estimated_read]
+    kept = []
+    for x in invs:
+        rival = next((a for a in actual if x.estimated_read and overlap(x, a)), None)
+        if rival:
+            warnings.append(f"{x.number}: estimated reading replaced by invoice {rival.number}")
+        else:
+            kept.append(x)
+
+    dropped: set[int] = set()
+    ranked = sorted(kept, key=lambda i: (_issued(i), i.start), reverse=True)
+    for n, old in enumerate(ranked):
+        for new in ranked[:n]:
+            if id(new) in dropped or not overlap(new, old):
+                continue
+            if new.start <= old.start and new.end >= old.end:
+                dropped.add(id(old))
+                warnings.append(f"{old.number}: replaced by newer invoice {new.number}")
+                break
+            start, end = max(new.start, old.start), min(new.end, old.end)
+            old.superseded.append((start, end))
+            warnings.append(
+                f"{old.number}: {start:%d.%m.%Y} - {end:%d.%m.%Y} replaced by newer invoice {new.number}"
+            )
+    for old in kept:
+        if id(old) in dropped or not old.superseded:
+            continue
+        covered = old.start
+        for s, e in sorted(old.superseded):
+            if s <= covered:
+                covered = max(covered, e)
+        if covered >= old.end:
+            dropped.add(id(old))
+            warnings.append(f"{old.number}: replaced by newer invoices")
+    return [i for i in kept if id(i) not in dropped]
 
 
 def find_gaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
-    """Дупки между фактурите. При същия разходомер количеството се знае от
-    показанията; цената се оценява по средната €/m³ на съседните фактури."""
-    gaps = []
-    for a, b in zip(invs, invs[1:]):
-        if b.start <= a.end:
-            continue
+    """Gaps between invoices. With the same meter the volume is known from the
+    readings; the price and the fixed cost per day are averaged from the
+    neighbouring invoices."""
+    def gap_between(a: Invoice, b: Invoice) -> Invoice | None:
         sa, sb = a.segments[-1], b.segments[0]
         same_meter = not sa.meter or not sb.meter or sa.meter == sb.meter
         m3 = sb.start_reading - sa.end_reading if same_meter else -1
         if m3 < 0:
-            warnings.append(
-                f"дупка {a.end:%d.%m.%Y} - {b.start:%d.%m.%Y}: не може да се изчисли"
-            )
-            continue
-        price = (a.total_eur / a.m3 + b.total_eur / b.m3) / 2 if a.m3 and b.m3 else 0.0
+            warnings.append(f"gap {a.end:%d.%m.%Y} - {b.start:%d.%m.%Y}: cannot be calculated")
+            return None
+        price = (a.variable_cost / a.m3 + b.variable_cost / b.m3) / 2 if a.m3 and b.m3 else 0.0
+        fixed_per_day = (
+            (a.fixed_cost / a.days + b.fixed_cost / b.days) / 2 if a.days and b.days else 0.0
+        )
+        fixed = round(fixed_per_day * (b.start - a.end).total_seconds() / 86400, 2)
         cal = ((a.calorific or DEFAULT_CALORIFIC) + (b.calorific or DEFAULT_CALORIFIC)) / 2
-        gap = Invoice(number="ДУПКА", date="", file="", calorific=cal,
-                      total_eur=round(m3 * price, 2), estimated=True)
+        gap = Invoice(
+            number="GAP", date="", file="", calorific=cal, total=round(m3 * price + fixed, 2),
+            currency=a.currency, fixed_cost=fixed, estimated=True,
+        )
         gap.segments.append(
             Segment(sa.meter or sb.meter, a.end, b.start, sa.end_reading, sb.start_reading, m3)
         )
-        gaps.append(gap)
+        return gap
+
+    gaps: list[Invoice] = []
+    if not invs:
+        return gaps
+    a = invs[0]  # the invoice reaching furthest so far
+    for b in invs[1:]:
+        if b.start > a.end and (gap := gap_between(a, b)):
+            gaps.append(gap)
+        if b.end > a.end:
+            a = b
     return gaps
 
 
-# ----------------------------------------------------------------- разпределяне
+# ----------------------------------------------------------------- distribution
 def hour_range(start: datetime, end: datetime):
     h = start.replace(minute=0, second=0, microsecond=0)
     while h < end:
@@ -146,8 +220,8 @@ def hour_range(start: datetime, end: datetime):
 
 
 def base_load_for(inv: Invoice, invs: list[Invoice]) -> float:
-    """Базова консумация (топла вода, готвене) в m³/ден: най-ниската средна
-    дневна консумация сред реалните фактури в рамките на ±6 месеца."""
+    """Base consumption (hot water, cooking) in m³/day: the lowest average
+    daily consumption among the real invoices within ±6 months."""
     rates = [
         i.m3 / i.days
         for i in invs
@@ -163,22 +237,34 @@ def distribute(
     base_load: float | None,
     warnings: list[str],
 ) -> dict[datetime, list[float]]:
-    """Връща {час(UTC): [m3, kWh, EUR]}.
+    """Returns {hour (UTC): [m3, kWh, cost]}.
 
-    base_load=None -> автоматично за всяка фактура (base_load_for).
-    temps=None -> равномерно разпределение.
+    Variable cost follows the gas volume; the fixed cost (standing charge) is
+    spread evenly over the invoice period.
+    base_load=None -> automatic per invoice (base_load_for).
+    temps=None -> even distribution.
     """
     out: dict[datetime, list[float]] = {}
     for inv in invs:
-        eur_per_m3 = inv.total_eur / inv.m3 if inv.m3 else 0.0
         kwh_per_m3 = (inv.calorific or DEFAULT_CALORIFIC) * 1000
         bl = base_load_for(inv, invs) if base_load is None else base_load
+        parts = []
         for seg in inv.segments:
             hours = list(hour_range(seg.start, seg.end))
             frac = [
                 (min(h + timedelta(hours=1), seg.end) - max(h, seg.start)).total_seconds() / 3600
                 for h in hours
             ]
+            parts.append((seg, hours, frac))
+        inv_hours = sum(sum(frac) for _, _, frac in parts)
+        if not inv_hours:
+            continue
+        total = inv.total or 0.0
+        fixed = inv.fixed_cost if inv.m3 else total
+        cost_per_m3 = (total - fixed) / inv.m3 if inv.m3 else 0.0
+        fixed_per_hour = fixed / inv_hours
+
+        for seg, hours, frac in parts:
             total_frac = sum(frac)
             if not total_frac:
                 continue
@@ -192,15 +278,17 @@ def distribute(
                     if sum(weights) <= 0:
                         weights = None
                 else:
-                    warnings.append(f"{inv.number}: липсват температури, разпределено равномерно")
+                    warnings.append(f"{inv.number}: temperatures missing, distributed evenly")
             if weights is None:
                 weights = frac
             sw = sum(weights)
 
             for h, f, w in zip(hours, frac, weights):
+                if any(s <= h < e for s, e in inv.superseded):
+                    continue
                 m3 = base_total * f / total_frac + heat_total * w / sw
                 row = out.setdefault(h, [0.0, 0.0, 0.0])
                 row[0] += m3
                 row[1] += m3 * kwh_per_m3
-                row[2] += m3 * eur_per_m3
+                row[2] += m3 * cost_per_m3 + f * fixed_per_hour
     return out

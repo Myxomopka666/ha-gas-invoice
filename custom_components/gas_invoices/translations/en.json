@@ -63,7 +63,7 @@
       },
       "debug": {
         "title": "Invoice diagnostics",
-        "description": "Choose a PDF invoice from a supplier that is not supported yet. The integration extracts its text and masks personal data (name, address, personal ID, customer number, phone, e-mail, IBAN). **The file is not stored.**\n\nReview the text, copy it and send it in a [GitHub new supplier request]({issue_url}).",
+        "description": "Choose a PDF invoice from a supplier that is not supported yet. The integration extracts its text and masks personal data (name, address, personal ID, customer and account numbers, meter numbers, phone, e-mail, IBAN). **The file is not stored.**\n\nReview the text, copy it and send it in a [GitHub new supplier request]({issue_url}).",
         "data": {
           "file": "PDF invoice",
           "mask": "Also hide (optional)"
@@ -79,8 +79,11 @@
       "no_invoices": "No invoice was added:\n{details}"
     },
     "abort": {
-      "uploaded": "Invoices uploaded: {added} new, {updated} already uploaded, {duplicates} duplicates, {skipped} skipped.\nImport: {summary}\n\nSkipped files:\n{problems}",
-      "debug": "{status}\n\nMasked items: **{masked}**. Review the text - if anything personal remains, run the diagnostics again and add it to „Also hide“.\n\nCopy the text and send it in a [new supplier request]({issue_url}):\n\n```\n{text}\n```"
+      "uploaded": "Invoices uploaded: {added} new, {updated} already uploaded, {duplicates} duplicates, {skipped} skipped.\nImport: {invoices} invoices, {m3} m³, {cost} {currency}\n\nSkipped files:\n{problems}",
+      "uploaded_import_failed": "Invoices uploaded: {added} new, {updated} already uploaded, {duplicates} duplicates, {skipped} skipped.\nImport failed: {error}\n\nSkipped files:\n{problems}",
+      "debug_parsed": "✅ Recognised invoice from **{supplier}**: No. {number}, {m3} m³, {cost} {currency}. It is already supported - upload it from „Upload invoices“.\n\nMasked items: **{masked}**. Review the text - if anything personal remains, run the diagnostics again and add it to „Also hide“.\n\nCopy the text and send it in a [new supplier request]({issue_url}):\n\n```\n{text}\n```",
+      "debug_unreadable": "⚠️ Supplier **{supplier}** is supported, but this invoice could not be read: {error}\n\nMasked items: **{masked}**. Review the text - if anything personal remains, run the diagnostics again and add it to „Also hide“.\n\nCopy the text and send it in a [new supplier request]({issue_url}):\n\n```\n{text}\n```",
+      "debug_unsupported": "❓ This supplier is not supported yet.\n\nMasked items: **{masked}**. Review the text - if anything personal remains, run the diagnostics again and add it to „Also hide“.\n\nCopy the text and send it in a [new supplier request]({issue_url}):\n\n```\n{text}\n```"
     }
   },
   "entity": {
@@ -155,5 +158,12 @@
         }
       }
     }
+  },
+  "exceptions": {
+    "not_configured": { "message": "Gas Invoices is not configured" },
+    "folder_missing": { "message": "Folder {folder} does not exist or is not accessible" },
+    "no_invoices": { "message": "No readable invoices in {folder}" },
+    "file_missing": { "message": "File {file} does not exist" },
+    "mixed_currency": { "message": "The invoices use different currencies: {currencies}. All invoices in the folder must be in one currency." }
   }
 }

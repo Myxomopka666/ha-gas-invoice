@@ -1,19 +1,19 @@
 /*
- * Gas Invoices card - качване на фактури (drag & drop, много файлове) и резюме.
- * Зарежда се автоматично от интеграцията gas_invoices.
+ * Gas Invoices card - uploading invoices (drag & drop, many files) and a summary.
+ * Loaded automatically by the gas_invoices integration.
  *
  *   type: custom:gas-invoices-card
- *   layout: tiles        # tiles (по подразбиране) | chips | list
- *   title: Газ           # по желание
+ *   layout: tiles        # tiles (default) | chips | list
+ *   title: Газ           # optional
  */
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.4.0";
 console.info(
   `%c GAS-INVOICES-CARD %c v${CARD_VERSION} `,
   "color:#fff;background:#1e78e6;font-weight:bold",
   "color:#1e78e6;background:#fff;font-weight:bold"
 );
 
-const BATCH_BYTES = 8 * 1024 * 1024; // HA приема до 16 MB на заявка
+const BATCH_BYTES = 8 * 1024 * 1024; // HA accepts up to 16 MB per request
 const LAYOUTS = ["tiles", "chips", "list"];
 
 const TEXT = {
@@ -41,6 +41,11 @@ const TEXT = {
     noSensor: "Интеграцията Gas Invoices не е намерена.",
     warnings: "Предупреждения",
     close: "Затвори",
+    layout: "Изглед",
+    titleLabel: "Заглавие",
+    tiles: "Плочки",
+    chips: "Чипове",
+    list: "Списък",
   },
   en: {
     title: "Gas invoices",
@@ -66,10 +71,15 @@ const TEXT = {
     noSensor: "Gas Invoices integration not found.",
     warnings: "Warnings",
     close: "Close",
+    layout: "Layout",
+    titleLabel: "Title",
+    tiles: "Tiles",
+    chips: "Chips",
+    list: "List",
   },
 };
 
-// цвят и икона за всяка категория от резултата
+// colour and icon for each result category
 const RESULT_KINDS = [
   { key: "added", color: "var(--success-color, #43a047)", icon: "mdi:file-plus-outline" },
   { key: "updated", color: "var(--info-color, #039be5)", icon: "mdi:file-sync-outline" },
@@ -84,6 +94,29 @@ const fmt = (v, d = 2, lang) =>
 
 const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// currency code -> symbol in the user's locale (GBP -> £, EUR -> €)
+const curSym = (code, lang) => {
+  if (!code) return "";
+  try {
+    return (
+      new Intl.NumberFormat(lang, { style: "currency", currency: code, currencyDisplay: "narrowSymbol" })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value || code
+    );
+  } catch (e) {
+    return code;
+  }
+};
+
+// Period end. Whole-day periods end at midnight of the day AFTER the last day,
+// so a "T00:00:00" end time is shown as the previous calendar day. Done on the
+// date part of the string, independent of the browser's time zone.
+const periodEnd = (s) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T00:00:00(?:\.0+)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(s);
+  if (!m) return new Date(s);
+  return new Date(+m[1], +m[2] - 1, +m[3] - 1, 12); // local noon, avoids DST edges
+};
 
 class GasInvoicesCard extends HTMLElement {
   setConfig(config) {
@@ -101,7 +134,7 @@ class GasInvoicesCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (this._busy) return;
-    // прерисуваме само ако са се променили сензорите на интеграцията
+    // re-render only if the integration's sensors changed
     const e = this._entities();
     const sig = [hass.language, ...Object.values(e).map((s) => s.entity_id + s.last_updated)].join("|");
     if (sig !== this._sig) {
@@ -112,6 +145,19 @@ class GasInvoicesCard extends HTMLElement {
 
   getCardSize() {
     return this._config?.layout === "list" ? 6 : 5;
+  }
+
+  // Sections view (HA >= 2024.11): 12-column grid, ~56px rows. Full width by
+  // default, resizable down to a compact minimum; height follows the content.
+  getGridOptions() {
+    const layout = this._config?.layout || "tiles";
+    const opts = { columns: 12, min_columns: layout === "tiles" ? 6 : 4, rows: "auto" };
+    opts.min_rows = layout === "tiles" ? 4 : layout === "chips" ? 3 : 4;
+    return opts;
+  }
+
+  static getConfigElement() {
+    return document.createElement("gas-invoices-card-editor");
   }
 
   static getStubConfig() {
@@ -126,7 +172,7 @@ class GasInvoicesCard extends HTMLElement {
     return this._config.layout || "tiles";
   }
 
-  /* --- намиране на сензорите на интеграцията --- */
+  /* --- finding the integration's sensors --- */
   _entities() {
     const h = this._hass;
     if (!h) return {};
@@ -140,14 +186,14 @@ class GasInvoicesCard extends HTMLElement {
       const u = a.unit_of_measurement;
       if (a.total_m3 !== undefined && a.gaps !== undefined) out.invoices = s;
       else if (a.number !== undefined && u === "m³") out.m3 = s;
-      else if (a.number !== undefined && u === "EUR") out.cost = s;
-      else if (a.number !== undefined && u === "EUR/m³") out.price = s;
+      else if (a.number !== undefined && a.device_class === "monetary") out.cost = s;
+      else if (a.number !== undefined && typeof u === "string" && u.endsWith("/m³")) out.price = s;
     }
     if (this._config.entity && h.states[this._config.entity]) out.invoices = h.states[this._config.entity];
     return out;
   }
 
-  /* --- качване --- */
+  /* --- upload --- */
   async _upload(fileList) {
     const files = [...fileList].filter((f) => /\.(pdf|zip)$/i.test(f.name));
     if (!files.length || this._busy) return;
@@ -214,30 +260,35 @@ class GasInvoicesCard extends HTMLElement {
     this._render();
   }
 
-  /* --- данни за изгледа --- */
+  /* --- view data --- */
   _data() {
     const e = this._entities();
     const inv = e.invoices?.attributes || {};
     const lang = this._hass.locale?.language || this._hass.language;
     const n = (v, d = 2) => fmt(v, d, lang);
-    const date = (s) =>
-      s ? new Date(s).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) : "–";
+    const sym = (c) => curSym(c, lang);
+    const date = (s, end) =>
+      s
+        ? (end ? periodEnd(s) : new Date(s)).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" })
+        : "–";
     return {
       found: !!e.invoices,
       count: e.invoices?.state ?? "–",
       totalM3: n(inv.total_m3, 0),
-      totalEur: n(inv.total_eur),
+      totalCost: n(inv.total ?? inv.total_eur),
+      cur: sym(inv.currency || e.cost?.attributes.unit_of_measurement || "EUR"),
       lastM3: n(e.m3?.state, 0),
-      lastEur: n(e.cost?.state),
+      lastCost: n(e.cost?.state),
       price: n(e.price?.state, 3),
       from: date(e.m3?.attributes.from),
-      to: date(e.m3?.attributes.to),
+      to: date(e.m3?.attributes.to, true),
       warnings: inv.warnings || [],
       n,
+      sym,
     };
   }
 
-  /* --- общи части --- */
+  /* --- shared parts --- */
   _dropZone(compact = false) {
     const t = this._t;
     return `
@@ -255,7 +306,7 @@ class GasInvoicesCard extends HTMLElement {
     const r = this._result;
     if (!r?.import) return "";
     return `<div class="import-line"><ha-icon icon="mdi:check-circle"></ha-icon>
-      ${this._t.imported}: <b>${r.import.invoices}</b> · <b>${d.n(r.import.total_m3, 0)} m³</b> · <b>${d.n(r.import.total_eur)} €</b></div>`;
+      ${this._t.imported}: <b>${r.import.invoices}</b> · <b>${d.n(r.import.total_m3, 0)} m³</b> · <b>${d.n(r.import.total)} ${d.sym(r.import.currency || "EUR")}</b></div>`;
   }
 
   _errors() {
@@ -275,7 +326,7 @@ class GasInvoicesCard extends HTMLElement {
     return this._result ? `<button class="icon-btn" id="close" title="${this._t.close}"><ha-icon icon="mdi:close"></ha-icon></button>` : "";
   }
 
-  /* --- резултат: 3 варианта --- */
+  /* --- result: 3 variants --- */
   _resultTiles(d) {
     const u = this._result?.upload;
     if (!u) return "";
@@ -337,15 +388,15 @@ class GasInvoicesCard extends HTMLElement {
       </div>`;
   }
 
-  /* --- резюме: 3 варианта --- */
+  /* --- summary: 3 variants --- */
   _summaryTiles(d) {
     const t = this._t;
     return `
       <div class="hero">
         <div class="hero-main">
           <div class="hero-label">${t.last}</div>
-          <div class="hero-value">${d.lastEur}<span class="unit"> €</span></div>
-          <div class="hero-sub">${d.lastM3} m³ · ${d.price} €/m³</div>
+          <div class="hero-value">${d.lastCost}<span class="unit"> ${d.cur}</span></div>
+          <div class="hero-sub">${d.lastM3} m³ · ${d.price} ${d.cur}/m³</div>
           <div class="hero-sub muted"><ha-icon icon="mdi:calendar-range"></ha-icon>${d.from} – ${d.to}</div>
         </div>
         <ha-icon class="hero-icon" icon="mdi:fire"></ha-icon>
@@ -353,7 +404,7 @@ class GasInvoicesCard extends HTMLElement {
       <div class="stats">
         <div class="stat"><ha-icon icon="mdi:file-document-multiple-outline"></ha-icon><div><div class="sv">${d.count}</div><div class="sl">${t.invoices}</div></div></div>
         <div class="stat"><ha-icon icon="mdi:meter-gas-outline"></ha-icon><div><div class="sv">${d.totalM3} m³</div><div class="sl">${t.total}</div></div></div>
-        <div class="stat"><ha-icon icon="mdi:cash-multiple"></ha-icon><div><div class="sv">${d.totalEur} €</div><div class="sl">${t.totalCost}</div></div></div>
+        <div class="stat"><ha-icon icon="mdi:cash-multiple"></ha-icon><div><div class="sv">${d.totalCost} ${d.cur}</div><div class="sl">${t.totalCost}</div></div></div>
       </div>`;
   }
 
@@ -362,8 +413,8 @@ class GasInvoicesCard extends HTMLElement {
     return `
       <div class="grid">
         <div><span class="label">${t.invoices}</span><span class="value">${d.count}</span></div>
-        <div><span class="label">${t.total}</span><span class="value">${d.totalM3} m³ · ${d.totalEur} €</span></div>
-        <div><span class="label">${t.last}</span><span class="value">${d.lastM3} m³ · ${d.lastEur} € · ${d.price} €/m³</span></div>
+        <div><span class="label">${t.total}</span><span class="value">${d.totalM3} m³ · ${d.totalCost} ${d.cur}</span></div>
+        <div><span class="label">${t.last}</span><span class="value">${d.lastM3} m³ · ${d.lastCost} ${d.cur} · ${d.price} ${d.cur}/m³</span></div>
         <div><span class="label">${t.period}</span><span class="value">${d.from} – ${d.to}</span></div>
       </div>`;
   }
@@ -376,14 +427,14 @@ class GasInvoicesCard extends HTMLElement {
       <div class="slist">
         ${row("mdi:file-document-multiple-outline", t.invoices, d.count)}
         ${row("mdi:meter-gas-outline", t.total, `${d.totalM3} m³`)}
-        ${row("mdi:cash-multiple", t.totalCost, `${d.totalEur} €`)}
-        ${row("mdi:fire", t.last, `${d.lastM3} m³ · ${d.lastEur} €`)}
-        ${row("mdi:tag-outline", t.price, `${d.price} €/m³`)}
+        ${row("mdi:cash-multiple", t.totalCost, `${d.totalCost} ${d.cur}`)}
+        ${row("mdi:fire", t.last, `${d.lastM3} m³ · ${d.lastCost} ${d.cur}`)}
+        ${row("mdi:tag-outline", t.price, `${d.price} ${d.cur}/m³`)}
         ${row("mdi:calendar-range", t.period, `${d.from} – ${d.to}`)}
       </div>`;
   }
 
-  /* --- изглед --- */
+  /* --- view --- */
   _render() {
     if (!this.shadowRoot || !this._hass) return;
     const t = this._t;
@@ -439,7 +490,7 @@ class GasInvoicesCard extends HTMLElement {
 
 const STYLES = `
   :host { --gi-accent: var(--primary-color); --gi-soft: color-mix(in srgb, var(--primary-color) 8%, transparent); }
-  ha-card { padding: 16px; }
+  ha-card { padding: 16px; container-type: inline-size; }
   ha-icon { --mdc-icon-size: 20px; }
   .head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px; }
   .title { display:flex; align-items:center; gap:8px; min-width:0; }
@@ -524,29 +575,87 @@ const STYLES = `
   .lval { font-weight:700; min-width:2.5em; text-align:right; padding:1px 8px; border-radius:10px;
           background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); }
 
-  @media (max-width: 450px) {
+  /* react to the card's own width (sections view), not the viewport */
+  @container (max-width: 450px) {
     .grid { grid-template-columns: 1fr; }
     .stats { grid-template-columns: 1fr; }
     .rtiles { grid-template-columns: repeat(2, 1fr); }
   }
 `;
 
-// Регистрация. Ако скриптът е зареден преди HA да подмени window.customElements
-// (scoped registry), дефиницията може да остане в стария регистър - затова
-// проверяваме отново, след като страницата се зареди.
+// Visual editor: a single ha-form, so HA shows the Config / Visibility / Layout tabs.
+class GasInvoicesCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+    this._update();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._update();
+  }
+
+  get _t() {
+    return (this._hass?.language || "en").startsWith("bg") ? TEXT.bg : TEXT.en;
+  }
+
+  _update() {
+    if (!this._config) return;
+    if (!this._form) {
+      this._form = document.createElement("ha-form");
+      this._form.addEventListener("value-changed", (ev) => {
+        ev.stopPropagation();
+        const config = { type: this._config.type, ...ev.detail.value };
+        if (!config.title) delete config.title;
+        this._config = config;
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
+      });
+      this.appendChild(this._form);
+    }
+    const t = this._t;
+    this._form.hass = this._hass;
+    this._form.data = this._config;
+    this._form.schema = [
+      {
+        name: "layout",
+        selector: { select: { mode: "dropdown", options: LAYOUTS.map((l) => ({ value: l, label: t[l] })) } },
+      },
+      { name: "title", selector: { text: {} } },
+    ];
+    this._form.computeLabel = (s) => (s.name === "title" ? t.titleLabel : t[s.name] || s.name);
+  }
+}
+
+// Registration. If the script is loaded before HA swaps window.customElements
+// (scoped registry), the definition may stay in the old registry - so we
+// check again after the page has loaded.
 const TAG = "gas-invoices-card";
 const defineCard = () => {
   if (customElements.get(TAG)) return;
   try {
     customElements.define(TAG, class extends GasInvoicesCard {});
   } catch (e) {
-    /* вече е дефинирана */
+    /* already defined */
   }
 };
 defineCard();
 window.addEventListener("load", defineCard);
 setTimeout(defineCard, 1000);
 setTimeout(defineCard, 5000);
+
+const TAG_EDITOR = "gas-invoices-card-editor";
+const defineEditor = () => {
+  if (customElements.get(TAG_EDITOR)) return;
+  try {
+    customElements.define(TAG_EDITOR, class extends GasInvoicesCardEditor {});
+  } catch (e) {
+    /* already defined */
+  }
+};
+defineEditor();
+window.addEventListener("load", defineEditor);
+setTimeout(defineEditor, 1000);
+setTimeout(defineEditor, 5000);
 
 window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === TAG)) {

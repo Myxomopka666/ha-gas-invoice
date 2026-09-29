@@ -1,4 +1,4 @@
-"""Общи модели и помощни функции за парсерите на доставчици (без зависимости от HA)."""
+"""Shared models and helpers for supplier parsers (no Home Assistant dependencies)."""
 from __future__ import annotations
 
 import re
@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 BGN_PER_EUR = 1.95583
-DEFAULT_CALORIFIC = 0.01075  # MWh/m³, ако фактурата не го посочва
+DEFAULT_CALORIFIC = 0.01075  # MWh/m³, when the invoice does not state it
 
 
 @dataclass
@@ -27,12 +27,17 @@ class Invoice:
     file: str
     segments: list[Segment] = field(default_factory=list)
     calorific: float | None = None  # MWh/m³
-    total_eur: float | None = None
+    total: float | None = None  # amount due, in `currency`
+    currency: str = "EUR"  # ISO 4217 code
+    fixed_cost: float = 0.0  # part of `total` independent of consumption (standing charge)
     total_bgn: float | None = None
     eur_from_bgn: bool = False
-    compensated: bool = False  # 2022 компенсации по РМС
-    estimated: bool = False  # дупка между фактури, попълнена от показанията
+    compensated: bool = False  # 2022 government compensation (Bulgaria)
+    estimated: bool = False  # gap between invoices, filled from meter readings
+    estimated_read: bool = False  # the supplier billed an estimated meter reading
     supplier: str = ""
+    extras: dict = field(default_factory=dict)  # supplier-specific details, informational only
+    superseded: list[tuple[datetime, datetime]] = field(default_factory=list)  # UTC windows taken over by a newer invoice
 
     @property
     def m3(self) -> float:
@@ -54,6 +59,11 @@ class Invoice:
     def days(self) -> float:
         return (self.end - self.start).total_seconds() / 86400
 
+    @property
+    def variable_cost(self) -> float:
+        """The part of the amount that follows consumption."""
+        return (self.total or 0.0) - self.fixed_cost
+
     def as_dict(self, tz: ZoneInfo) -> dict:
         return {
             "number": self.number,
@@ -62,13 +72,19 @@ class Invoice:
             "to": self.end.astimezone(tz).isoformat(),
             "m3": round(self.m3, 2),
             "kwh": round(self.kwh, 1),
-            "eur": self.total_eur,
-            "eur_per_m3": round(self.total_eur / self.m3, 4) if self.m3 else None,
+            "cost": self.total,
+            "currency": self.currency,
+            "fixed_cost": round(self.fixed_cost, 2),
+            "price_per_m3": (
+                round(self.total / self.m3, 4) if self.m3 and self.total is not None else None
+            ),
             "estimated": self.estimated,
+            "estimated_read": self.estimated_read,
+            "extras": self.extras,
         }
 
 
-# --- общи регулярни изрази и помощни функции
+# --- shared regular expressions and helpers
 NUM = r"\d+(?:[.,]\d+)?"
 MONEY = r"(\d+[.,]\d{2})"
 RE_EUR = (re.compile(r"(?:€|EUR)\s*" + MONEY), re.compile(MONEY + r"\s*(?:€|EUR)"))
@@ -81,13 +97,13 @@ def num(s: str) -> float:
 
 
 def local_dt(s: str, tz: ZoneInfo, fmts=("%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M", "%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M")) -> datetime:
-    """Местно време от фактурата -> aware UTC."""
+    """Local time from the invoice -> aware UTC."""
     for fmt in fmts:
         try:
             return datetime.strptime(s.strip(), fmt).replace(tzinfo=tz).astimezone(timezone.utc)
         except ValueError:
             continue
-    raise ValueError(f"непознат формат на дата: {s}")
+    raise ValueError(f"unknown date format: {s}")
 
 
 def first(rxs, text: str) -> float | None:
@@ -98,7 +114,8 @@ def first(rxs, text: str) -> float | None:
 
 
 def to_eur(inv: Invoice) -> None:
-    """Ако сумата е само в лева - превръща по фиксирания курс."""
-    if inv.total_eur is None and inv.total_bgn is not None:
-        inv.total_eur = round(inv.total_bgn / BGN_PER_EUR, 2)
+    """If the amount is only in BGN, convert it at the fixed euro rate."""
+    if inv.total is None and inv.total_bgn is not None:
+        inv.total = round(inv.total_bgn / BGN_PER_EUR, 2)
+        inv.currency = "EUR"
         inv.eur_from_bgn = True

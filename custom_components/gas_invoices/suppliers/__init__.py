@@ -1,22 +1,22 @@
-"""Парсери по доставчици.
+"""Per-supplier parsers.
 
-За нов доставчик: добави модул с KEY, NAME, detect(text) -> bool и
-parse(text, tz, filename) -> Invoice, и го сложи в SUPPLIERS.
+For a new supplier: add a module with KEY, NAME, detect(text) -> bool and
+parse(text, tz, filename) -> Invoice, and put it in SUPPLIERS.
 """
 from __future__ import annotations
 
 from zoneinfo import ZoneInfo
 
-from . import kostinbrodgaz
+from . import kostinbrodgaz, outfox
 from .base import BGN_PER_EUR, DEFAULT_CALORIFIC, Invoice, Segment
 
 __all__ = ["BGN_PER_EUR", "DEFAULT_CALORIFIC", "Invoice", "Segment", "SUPPLIERS", "UnknownSupplierError", "detect", "parse", "supported_names"]
 
-SUPPLIERS = [kostinbrodgaz]
+SUPPLIERS = [kostinbrodgaz, outfox]
 
 
 class UnknownSupplierError(ValueError):
-    """Фактурата е от доставчик, който още не се поддържа."""
+    """The invoice is from a supplier that is not supported yet."""
 
 
 def detect(text: str):
@@ -34,6 +34,6 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
     sup = detect(text)
     if sup is None:
         raise UnknownSupplierError(
-            "непознат доставчик (поддържани: " + ", ".join(supported_names()) + ")"
+            "unknown supplier (supported: " + ", ".join(supported_names()) + ")"
         )
     return sup.parse(text, tz, filename)
