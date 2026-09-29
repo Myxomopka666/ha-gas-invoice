@@ -1,7 +1,7 @@
-"""Парсери по доставчици.
+"""Per-supplier parsers.
 
-За нов доставчик: добави модул с KEY, NAME, detect(text) -> bool и
-parse(text, tz, filename) -> Invoice, и го сложи в SUPPLIERS.
+For a new supplier: add a module with KEY, NAME, detect(text) -> bool and
+parse(text, tz, filename) -> Invoice, and put it in SUPPLIERS.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ SUPPLIERS = [kostinbrodgaz, outfox]
 
 
 class UnknownSupplierError(ValueError):
-    """Фактурата е от доставчик, който още не се поддържа."""
+    """The invoice is from a supplier that is not supported yet."""
 
 
 def detect(text: str):

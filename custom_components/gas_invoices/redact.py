@@ -13,7 +13,7 @@ import re
 
 MASK = "████"
 
-# етикет -> маскира се стойността след него (до края на реда или до следващия етикет)
+# label -> the value after it is masked (to the end of the line or the next label)
 _ID_LABELS = (
     r"Идент\.?\s*№|ЕГН|ЛНЧ|ЕИК|БУЛСТАТ|Булстат|ИН\s*по\s*ДДС|ДДС\s*№|"
     r"VAT\s*(?:Reg(?:istration)?\.?\s*)?(?:No\.?|Number)|"
@@ -32,9 +32,9 @@ RE_NAME_AFTER = re.compile(rf"(\b(?:{_NAME_LABELS})[ \t]*:[ \t]*)([^\n:]*?)(?=[ 
 RE_IBAN = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{4}\d{6,18}\b")
 RE_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 RE_PHONE = re.compile(r"(?:\+359|00359)[\s-]?\d[\d\s-]{6,12}\d|(?<![\d.,])08[789][\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}(?![\d.,])")
-# три поредни думи, започващи с главна кирилска буква (Име Презиме Фамилия)
+# three consecutive words starting with a capital Cyrillic letter (First Middle Last)
 RE_FULLNAME = re.compile(r"\b[А-Я][а-я]+(?:-[А-Я][а-я]+)?\s+[А-Я][а-я]+\s+[А-Я][а-я]+(?:-[А-Я][а-я]+)?\b")
-# ред, който е само две думи с главна буква (напр. име на служител/клиент на отделен ред)
+# a line that is only two capitalised words (e.g. an employee/customer name on its own line)
 RE_NAME_LINE = re.compile(r"^[ \t]*[А-Я][а-я]+(?:-[А-Я][а-я]+)?[ \t]+[А-Я][а-я]+(?:-[А-Я][а-я]+)?[ \t]*$", re.M)
 RE_10DIGITS = re.compile(r"(?<!\d)\d{10}(?!\d)")
 # UK: identifiers with these labels are also masked where they appear without the label
@@ -74,7 +74,7 @@ def _mask_value(m: re.Match) -> str:
 
 
 def redact(text: str, extra: list[str] | None = None) -> tuple[str, int]:
-    """Връща (замаскиран текст, брой замени)."""
+    """Returns (masked text, number of replacements)."""
     count = 0
 
     def sub(rx, repl, s):

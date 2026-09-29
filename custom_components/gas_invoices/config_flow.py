@@ -1,4 +1,4 @@
-"""Config flow и options flow (качване на фактури, настройки)."""
+"""Config flow and options flow (uploading invoices, settings)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -168,7 +168,7 @@ class GasInvoicesOptionsFlow(OptionsFlow):
         )
 
     async def async_step_debug(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Диагностика: текст на фактура със замаскирани лични данни (за нов доставчик)."""
+        """Diagnostics: invoice text with personal data masked (for a new supplier)."""
         if user_input is not None:
             tz = ZoneInfo(self.hass.config.time_zone)
             extra = [w.strip() for w in str(user_input.get(CONF_MASK, "")).split(",") if w.strip()]

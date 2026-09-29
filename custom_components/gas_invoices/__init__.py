@@ -1,9 +1,9 @@
-"""Gas Invoices - газ от PDF фактури като статистики за Energy таблото.
+"""Gas Invoices - gas from PDF invoices as statistics for the Energy dashboard.
 
-- Качване на PDF/ZIP от UI (Settings -> Devices & services -> Gas Invoices -> Configure)
-- Бутон "Импорт" и сензори за последната фактура
-- Действие gas_invoices.import_invoices (за автоматизации / Node-RED)
-- Автоматичен импорт всяка нощ (по избор)
+- Upload PDF/ZIP from the UI (Settings -> Devices & services -> Gas Invoices -> Configure)
+- "Import" button and sensors for the latest invoice
+- Action gas_invoices.import_invoices (for automations / Node-RED)
+- Automatic import every night (optional)
 """
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ def entry_options(entry: ConfigEntry) -> dict:
 async def async_run_import(
     hass: HomeAssistant, entry: GasInvoicesConfigEntry, overrides: dict | None = None
 ) -> dict:
-    """Пуска импорта (един по един) и уведомява сензорите."""
+    """Runs the import (one at a time) and notifies the sensors."""
     data = entry.runtime_data
     async with data.lock:
         try:
@@ -110,7 +110,7 @@ async def async_run_import(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    # Lovelace картата (custom:gas-invoices-card) и endpoint-ът за качване от нея
+    # the Lovelace card (custom:gas-invoices-card) and the upload endpoint for it
     await async_setup_card(hass, VERSION)
     hass.http.register_view(GasInvoicesUploadView())
 
@@ -129,7 +129,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
 
     async def handle_debug(call: ServiceCall) -> ServiceResponse:
-        """Текст на фактура със замаскирани лични данни - за заявка за нов доставчик."""
+        """Invoice text with personal data masked - for a new supplier request."""
         path = Path(call.data[CONF_FILE])
         if not path.is_absolute():
             entries = hass.config_entries.async_loaded_entries(DOMAIN)

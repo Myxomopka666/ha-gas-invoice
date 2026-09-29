@@ -1,10 +1,10 @@
 /*
- * Gas Invoices card - качване на фактури (drag & drop, много файлове) и резюме.
- * Зарежда се автоматично от интеграцията gas_invoices.
+ * Gas Invoices card - uploading invoices (drag & drop, many files) and a summary.
+ * Loaded automatically by the gas_invoices integration.
  *
  *   type: custom:gas-invoices-card
- *   layout: tiles        # tiles (по подразбиране) | chips | list
- *   title: Газ           # по желание
+ *   layout: tiles        # tiles (default) | chips | list
+ *   title: Газ           # optional
  */
 const CARD_VERSION = "1.2.0";
 console.info(
@@ -13,7 +13,7 @@ console.info(
   "color:#1e78e6;background:#fff;font-weight:bold"
 );
 
-const BATCH_BYTES = 8 * 1024 * 1024; // HA приема до 16 MB на заявка
+const BATCH_BYTES = 8 * 1024 * 1024; // HA accepts up to 16 MB per request
 const LAYOUTS = ["tiles", "chips", "list"];
 
 const TEXT = {
@@ -69,7 +69,7 @@ const TEXT = {
   },
 };
 
-// цвят и икона за всяка категория от резултата
+// colour and icon for each result category
 const RESULT_KINDS = [
   { key: "added", color: "var(--success-color, #43a047)", icon: "mdi:file-plus-outline" },
   { key: "updated", color: "var(--info-color, #039be5)", icon: "mdi:file-sync-outline" },
@@ -115,7 +115,7 @@ class GasInvoicesCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (this._busy) return;
-    // прерисуваме само ако са се променили сензорите на интеграцията
+    // re-render only if the integration's sensors changed
     const e = this._entities();
     const sig = [hass.language, ...Object.values(e).map((s) => s.entity_id + s.last_updated)].join("|");
     if (sig !== this._sig) {
@@ -140,7 +140,7 @@ class GasInvoicesCard extends HTMLElement {
     return this._config.layout || "tiles";
   }
 
-  /* --- намиране на сензорите на интеграцията --- */
+  /* --- finding the integration's sensors --- */
   _entities() {
     const h = this._hass;
     if (!h) return {};
@@ -161,7 +161,7 @@ class GasInvoicesCard extends HTMLElement {
     return out;
   }
 
-  /* --- качване --- */
+  /* --- upload --- */
   async _upload(fileList) {
     const files = [...fileList].filter((f) => /\.(pdf|zip)$/i.test(f.name));
     if (!files.length || this._busy) return;
@@ -228,7 +228,7 @@ class GasInvoicesCard extends HTMLElement {
     this._render();
   }
 
-  /* --- данни за изгледа --- */
+  /* --- view data --- */
   _data() {
     const e = this._entities();
     const inv = e.invoices?.attributes || {};
@@ -254,7 +254,7 @@ class GasInvoicesCard extends HTMLElement {
     };
   }
 
-  /* --- общи части --- */
+  /* --- shared parts --- */
   _dropZone(compact = false) {
     const t = this._t;
     return `
@@ -292,7 +292,7 @@ class GasInvoicesCard extends HTMLElement {
     return this._result ? `<button class="icon-btn" id="close" title="${this._t.close}"><ha-icon icon="mdi:close"></ha-icon></button>` : "";
   }
 
-  /* --- резултат: 3 варианта --- */
+  /* --- result: 3 variants --- */
   _resultTiles(d) {
     const u = this._result?.upload;
     if (!u) return "";
@@ -354,7 +354,7 @@ class GasInvoicesCard extends HTMLElement {
       </div>`;
   }
 
-  /* --- резюме: 3 варианта --- */
+  /* --- summary: 3 variants --- */
   _summaryTiles(d) {
     const t = this._t;
     return `
@@ -400,7 +400,7 @@ class GasInvoicesCard extends HTMLElement {
       </div>`;
   }
 
-  /* --- изглед --- */
+  /* --- view --- */
   _render() {
     if (!this.shadowRoot || !this._hass) return;
     const t = this._t;
@@ -548,16 +548,16 @@ const STYLES = `
   }
 `;
 
-// Регистрация. Ако скриптът е зареден преди HA да подмени window.customElements
-// (scoped registry), дефиницията може да остане в стария регистър - затова
-// проверяваме отново, след като страницата се зареди.
+// Registration. If the script is loaded before HA swaps window.customElements
+// (scoped registry), the definition may stay in the old registry - so we
+// check again after the page has loaded.
 const TAG = "gas-invoices-card";
 const defineCard = () => {
   if (customElements.get(TAG)) return;
   try {
     customElements.define(TAG, class extends GasInvoicesCard {});
   } catch (e) {
-    /* вече е дефинирана */
+    /* already defined */
   }
 };
 defineCard();

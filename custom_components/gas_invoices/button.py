@@ -1,4 +1,4 @@
-"""Бутон "Импорт на фактурите"."""
+"""Button "Import invoices"."""
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity

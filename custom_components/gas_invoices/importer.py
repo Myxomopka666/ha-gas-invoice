@@ -1,4 +1,4 @@
-"""Импорт на фактурите в статистиките на Home Assistant и качване на файлове."""
+"""Import of invoices into Home Assistant statistics and file uploading."""
 from __future__ import annotations
 
 import io
@@ -22,7 +22,7 @@ from homeassistant.components.recorder.statistics import async_add_external_stat
 
 try:  # HA 2025.x+
     from homeassistant.components.recorder.models import StatisticMeanType
-except ImportError:  # по-стари версии
+except ImportError:  # older versions
     StatisticMeanType = None  # type: ignore[assignment,misc]
 
 from . import invoice as inv_mod
@@ -45,18 +45,18 @@ MAX_ZIP_MEMBERS = 1000
 MAX_PDF_SIZE = 20 * 1024 * 1024
 
 
-# --------------------------------------------------------------------------- качване
+# --------------------------------------------------------------------------- upload
 RE_SAVED = re.compile(r"^\d{4}-\d{2}_(\d+)\.pdf$", re.I)
 
 
 @dataclass
 class UploadResult:
-    """Резултат от качване. Номерата са номера на фактури."""
+    """Upload result. The numbers are invoice numbers."""
 
-    added: list[str] = field(default_factory=list)  # нови за папката
-    updated: list[str] = field(default_factory=list)  # вече бяха качени
-    duplicates: list[str] = field(default_factory=list)  # повторени в това качване
-    errors: list[str] = field(default_factory=list)  # не са фактури / грешни файлове
+    added: list[str] = field(default_factory=list)  # new to the folder
+    updated: list[str] = field(default_factory=list)  # already uploaded
+    duplicates: list[str] = field(default_factory=list)  # repeated in this upload
+    errors: list[str] = field(default_factory=list)  # not invoices / bad files
 
     @property
     def saved(self) -> int:
@@ -79,7 +79,7 @@ class UploadResult:
 
 
 def existing_numbers(folder: Path) -> set[str]:
-    """Номера на фактурите, вече записани в папката (по името ГГГГ-ММ_<номер>.pdf)."""
+    """Invoice numbers already saved in the folder (by the name YYYY-MM_<number>.pdf)."""
     if not folder.is_dir():
         return set()
     return {m.group(1) for f in folder.iterdir() if (m := RE_SAVED.match(f.name))}
@@ -88,12 +88,12 @@ def existing_numbers(folder: Path) -> set[str]:
 def save_files(
     items, folder: Path, tz: ZoneInfo, texts: dict[str, str], seen: set[str] | None = None
 ) -> UploadResult:
-    """Записва PDF файлове (итерируемо от (име, bytes)) в папката.
+    """Saves PDF files (an iterable of (name, bytes)) to the folder.
 
-    Всеки PDF се проверява, че е фактура, и се записва като ГГГГ-ММ_<номер>.pdf.
-    Извлеченият текст се добавя в texts (кеша), за да не се парсва повторно.
-    seen - номера, вече обработени в същото качване (за броене на дубликати).
-    Блокираща функция - за executor."""
+    Each PDF is checked to be an invoice and saved as YYYY-MM_<number>.pdf.
+    The extracted text is added to texts (the cache) so it isn't parsed again.
+    seen - numbers already processed in the same upload (for counting duplicates).
+    Blocking function - for the executor."""
     folder.mkdir(parents=True, exist_ok=True)
     before = existing_numbers(folder)
     seen = set() if seen is None else seen
@@ -130,7 +130,7 @@ def save_files(
 
 
 def save_upload(src: Path, folder: Path, tz: ZoneInfo, texts: dict[str, str]) -> UploadResult:
-    """Записва качен PDF или ZIP с PDF-и. Блокираща функция - за executor."""
+    """Saves an uploaded PDF or a ZIP of PDFs. Blocking function - for the executor."""
     with src.open("rb") as f:
         is_pdf = f.read(4) == b"%PDF"
     if is_pdf or not zipfile.is_zipfile(src):
@@ -154,7 +154,7 @@ def save_upload(src: Path, folder: Path, tz: ZoneInfo, texts: dict[str, str]) ->
         return res
 
 
-# --------------------------------------------------------------------------- импорт
+# --------------------------------------------------------------------------- import
 async def async_import(hass: HomeAssistant, store: Store, opts: dict) -> dict:
     """Reads all invoices, distributes them over hours and writes the statistics."""
     folder = Path(opts[CONF_FOLDER])
@@ -274,7 +274,7 @@ def _add_stats(hass, stat_id, name, unit, unit_class, hourly, idx) -> None:
     async_add_external_statistics(hass, meta, rows)
 
 
-# --------------------------------------------------------------------------- температури
+# --------------------------------------------------------------------------- temperatures
 async def _async_temperatures(
     hass: HomeAssistant,
     start: datetime,
@@ -282,7 +282,7 @@ async def _async_temperatures(
     cache: dict[str, list],
     warnings: list[str],
 ) -> dict[datetime, float]:
-    """Часови температури (UTC) от Open-Meteo, кеширани по дни: {"YYYY-MM-DD": [24]}."""
+    """Hourly temperatures (UTC) from Open-Meteo, cached by day: {"YYYY-MM-DD": [24]}."""
 
     def cached(h: datetime) -> float | None:
         day = cache.get(h.strftime("%Y-%m-%d"))
@@ -298,7 +298,7 @@ async def _async_temperatures(
         urls = [
             f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}"
             f"&start_date={d1}&end_date={d2}&hourly=temperature_2m&timezone=GMT",
-            # архивът закъснява ~5 дни, последните дни идват от прогнозата
+            # the archive lags ~5 days, the latest days come from the forecast
             f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
             f"&past_days=92&forecast_days=1&hourly=temperature_2m&timezone=GMT",
         ]
@@ -321,11 +321,11 @@ async def _async_temperatures(
     return {h.astimezone(timezone.utc): v for h in hours if (v := cached(h)) is not None}
 
 
-# --------------------------------------------------------------------------- диагностика
+# --------------------------------------------------------------------------- diagnostics
 def debug_pdf(data: bytes, name: str, tz: ZoneInfo, extra_mask: list[str] | None = None) -> dict:
-    """Извлича текста на PDF, замаскира личните данни и опитва да го разпознае.
-    Резултатът е безопасен за споделяне при заявка за нов доставчик.
-    Блокираща функция - за executor."""
+    """Extracts the PDF text, masks personal data and tries to recognise it.
+    The result is safe to share when requesting a new supplier.
+    Blocking function - for the executor."""
     from . import suppliers
     from .redact import redact
 

@@ -1,4 +1,4 @@
-"""Регистриране на Lovelace картата gas-invoices-card."""
+"""Registers the gas-invoices-card Lovelace card."""
 from __future__ import annotations
 
 import logging
@@ -17,10 +17,10 @@ CARD_FILE = "gas-invoices-card.js"
 
 
 async def async_setup_card(hass: HomeAssistant, version: str) -> None:
-    """Сервира JS файла и го регистрира като Lovelace ресурс.
+    """Serves the JS file and registers it as a Lovelace resource.
 
-    Не ползваме add_extra_js_url: така скриптът се зарежда преди frontend-ът да
-    подмени регистъра на custom елементите (scoped registry) и HA не вижда картата."""
+    We don't use add_extra_js_url: that loads the script before the frontend
+    swaps the custom elements registry (scoped registry), and HA doesn't see the card."""
     url = f"{CARD_URL_BASE}/{CARD_FILE}?v={version}"
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_URL_BASE, str(Path(__file__).parent / "www"), False)]
@@ -29,7 +29,7 @@ async def async_setup_card(hass: HomeAssistant, version: str) -> None:
     async def _register(_hass: HomeAssistant) -> None:
         try:
             await _async_register_resource(hass, url)
-        except Exception:  # noqa: BLE001 - картата е удобство, не бива да чупи интеграцията
+        except Exception:  # noqa: BLE001 - the card is a convenience, it must not break the integration
             _LOGGER.warning(
                 "Could not add the card to the Lovelace resources. Add it manually: %s (JavaScript module)",
                 url,
@@ -44,10 +44,10 @@ async def _async_register_resource(hass: HomeAssistant, url: str) -> None:
         from homeassistant.components.lovelace.const import LOVELACE_DATA
 
         ll = hass.data.get(LOVELACE_DATA)
-    except ImportError:  # по-стари версии
+    except ImportError:  # older versions
         ll = hass.data.get("lovelace")
 
-    if isinstance(ll, dict):  # по-стари версии пазят речник
+    if isinstance(ll, dict):  # older versions keep a dict
         mode, resources = ll.get("resource_mode", ll.get("mode")), ll.get("resources")
     else:
         mode, resources = getattr(ll, "resource_mode", None), getattr(ll, "resources", None)

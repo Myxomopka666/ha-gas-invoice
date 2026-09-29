@@ -1,4 +1,4 @@
-"""Сензори за последната фактура и последния импорт."""
+"""Sensors for the latest invoice and the latest import."""
 from __future__ import annotations
 
 from dataclasses import dataclass

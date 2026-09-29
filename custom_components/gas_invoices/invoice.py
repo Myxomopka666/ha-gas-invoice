@@ -1,9 +1,9 @@
-"""Четене на PDF фактури за газ и разпределяне на консумацията по часове.
+"""Reading PDF gas invoices and distributing consumption by hour.
 
-Парсерите за отделните доставчици са в пакета suppliers.
+The per-supplier parsers are in the suppliers package.
 
-Модулът няма зависимости от Home Assistant (само pdfminer.six), за да може да
-се тества отделно.
+The module has no Home Assistant dependencies (only pdfminer.six), so it can be
+tested on its own.
 """
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ from zoneinfo import ZoneInfo
 
 _LOGGER = logging.getLogger(__name__)
 
-try:  # като част от интеграцията
+try:  # as part of the integration
     from . import suppliers
-except ImportError:  # тестове / самостоятелно ползване
+except ImportError:  # tests / standalone use
     import suppliers  # type: ignore[no-redef]
 
 Invoice = suppliers.Invoice
@@ -27,11 +27,11 @@ DEFAULT_CALORIFIC = suppliers.DEFAULT_CALORIFIC
 UnknownSupplierError = suppliers.UnknownSupplierError
 
 
-# ----------------------------------------------------------------- PDF -> редове текст
+# ----------------------------------------------------------------- PDF -> lines of text
 def pdf_lines(path) -> str:
-    """Текст от PDF, подреден по редове (като pdfplumber), само с pdfminer.six.
+    """Text from a PDF arranged in lines (like pdfplumber), using only pdfminer.six.
 
-    path може да е път или отворен binary файл."""
+    path can be a path or an open binary file."""
     from pdfminer.high_level import extract_pages
     from pdfminer.layout import LTChar
 
@@ -46,7 +46,7 @@ def pdf_lines(path) -> str:
     for page in extract_pages(str(path) if isinstance(path, Path) else path):
         chars: list = []
         walk(page, chars)
-        chars = [c for c in chars if c.size < 30]  # без големия воден знак "ОРИГИНАЛ"
+        chars = [c for c in chars if c.size < 30]  # without the large "ОРИГИНАЛ" watermark
         chars.sort(key=lambda c: (-round(c.y1), c.x0))
         rows: list[list] = []
         for c in chars:
@@ -69,17 +69,17 @@ def pdf_lines(path) -> str:
     return "\n".join(lines_out)
 
 
-# ----------------------------------------------------------------- парсване
+# ----------------------------------------------------------------- parsing
 def parse_text(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
-    """Разпознава доставчика по текста и парсва с неговия парсер."""
+    """Detects the supplier from the text and parses with its parser."""
     return suppliers.parse(text, tz, filename)
 
 
 def load_invoices(
     folder: Path, tz: ZoneInfo, warnings: list[str], text_cache: dict[str, str] | None = None
 ) -> list[Invoice]:
-    """Чете всички PDF-и в папката. text_cache пази извлечения текст по
-    име+размер+дата, за да не се парсват PDF-ите наново при всяко пускане."""
+    """Reads all PDFs in the folder. text_cache keeps the extracted text by
+    name+size+date, so the PDFs aren't parsed again on every run."""
     found: dict[str, Invoice] = {}
     files = sorted({*folder.glob("*.pdf"), *folder.glob("*.PDF")})
     used: set[str] = set()
@@ -189,7 +189,7 @@ def find_gaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
     return gaps
 
 
-# ----------------------------------------------------------------- разпределяне
+# ----------------------------------------------------------------- distribution
 def hour_range(start: datetime, end: datetime):
     h = start.replace(minute=0, second=0, microsecond=0)
     while h < end:
@@ -198,8 +198,8 @@ def hour_range(start: datetime, end: datetime):
 
 
 def base_load_for(inv: Invoice, invs: list[Invoice]) -> float:
-    """Базова консумация (топла вода, готвене) в m³/ден: най-ниската средна
-    дневна консумация сред реалните фактури в рамките на ±6 месеца."""
+    """Base consumption (hot water, cooking) in m³/day: the lowest average
+    daily consumption among the real invoices within ±6 months."""
     rates = [
         i.m3 / i.days
         for i in invs

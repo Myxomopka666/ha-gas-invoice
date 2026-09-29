@@ -1,4 +1,4 @@
-"""Константи за Gas Invoices."""
+"""Constants for Gas Invoices."""
 from __future__ import annotations
 
 DOMAIN = "gas_invoices"
@@ -22,7 +22,7 @@ CONF_FILE = "file"
 CONF_MASK = "mask"
 ISSUE_URL = "https://github.com/Myxomopka666/ha-gas-invoice/issues/new?template=new_supplier.yml"
 
-DEFAULT_FOLDER_NAME = "gas_invoices"  # под /config
+DEFAULT_FOLDER_NAME = "gas_invoices"  # under /config
 DEFAULTS = {
     CONF_BASE_TEMP: 18.0,
     CONF_BASE_LOAD: "auto",
@@ -30,4 +30,4 @@ DEFAULTS = {
     CONF_WEATHER: True,
     CONF_DAILY: True,
 }
-DAILY_AT = (3, 15)  # час, минута за автоматичния импорт
+DAILY_AT = (3, 15)  # hour, minute of the automatic import

@@ -1,5 +1,5 @@
-"""КОСТИНБРОДГАЗ ООД (Костинброд). Всички формати от 2021 г. насам:
-само лева, лева с компенсации по РМС (2022), евро + лева (от 08.2025), само евро (от 2026)."""
+"""КОСТИНБРОДГАЗ ООД (Костинброд). All formats since 2021:
+BGN only, BGN with compensation under the Council of Ministers decree (2022), EUR + BGN (from 08.2025), EUR only (from 2026)."""
 from __future__ import annotations
 
 import re
@@ -11,7 +11,7 @@ KEY = "kostinbrodgaz"
 NAME = "Костинбродгаз"
 
 DT = r"\d{2}-\d{2}-\d{4} \d{2}:\d{2}(?::\d{2})?"
-_S = r"[ \t]+"  # само интервали - полетата трябва да са на един ред
+_S = r"[ \t]+"  # spaces only - the fields must be on one line
 RE_NUMBER = re.compile(r"№\s*(\d{6,})\s*/\s*(\d{2}-\d{2}-\d{4})")
 RE_METER = re.compile(
     rf"(?:([A-Za-z]+\d+){_S})?(?:([A-Za-z]+\d+){_S})?({DT}){_S}({NUM}){_S}({DT}){_S}({NUM})"
@@ -41,10 +41,10 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
     if c := RE_CALORIFIC.search(text):
         inv.calorific = num(c.group(1))
 
-    # Сума за плащане:
-    #  от 08.2025: "€ 64.90 лв 126.95" или само "€ 120.98"
-    #  до 07.2025: само в лева "285.05"
-    #  2022: компенсация по РМС -> реално платеното е "Стойност за плащане 379.55"
+    # Amount to pay:
+    #  from 08.2025: "€ 64.90 лв 126.95" or only "€ 120.98"
+    #  until 07.2025: BGN only "285.05"
+    #  2022: compensation under the decree -> the amount actually paid is "Стойност за плащане 379.55"
     i = text.find("Сума за плащане")
     zone = text[i : i + 120] if i >= 0 else ""
     inv.total = first(RE_EUR, zone)

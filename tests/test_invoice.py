@@ -1,4 +1,4 @@
-"""Тестове на парсера с анонимизиран текст (без истински лични данни)."""
+"""Parser tests with anonymised text (no real personal data)."""
 import dataclasses
 import json
 import re
@@ -86,7 +86,7 @@ def test_meter_swap_two_segments():
 
 def test_gap_filled_from_readings():
     a = inv.parse_text(EUR_ONLY, TZ)
-    b = inv.parse_text(METER_SWAP, TZ)  # започва 01.03, а a свършва 01.02
+    b = inv.parse_text(METER_SWAP, TZ)  # starts 01.03, and a ends 01.02
     w = []
     gaps = inv.find_gaps([a, b], w)
     assert len(gaps) == 1 and gaps[0].m3 == 5627 - 5423 and gaps[0].estimated

@@ -1,4 +1,4 @@
-"""Общ базов клас за entity-тата."""
+"""Common base class for the entities."""
 from __future__ import annotations
 
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
