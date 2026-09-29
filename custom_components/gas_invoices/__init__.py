@@ -48,7 +48,7 @@ from .importer import async_import, debug_pdf
 
 from .frontend import async_setup_card
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.BUTTON, Platform.SENSOR]

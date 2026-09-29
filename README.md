@@ -14,17 +14,22 @@ Track your **natural gas consumption and cost** in the Home Assistant **Energy d
 
 Your gas invoice arrives weeks after the billing period ends. Gas Invoices reads the PDF and extracts the billing period, meter readings, volume (m³), calorific value and amount due. It then **back-fills Home Assistant's long-term statistics for the actual days of the billing period**, not the day the invoice arrived. The Energy dashboard shows gas the same way it shows electricity: by day, month and year, with cost.
 
-> **Supported suppliers:** КОСТИНБРОДГАЗ ООД (Kostinbrod, Bulgaria), all invoice layouts since 2021: BGN only, BGN with 2022 government compensation, dual EUR/BGN, and EUR only.
+> **Supported suppliers:**
+> - 🇧🇬 КОСТИНБРОДГАЗ ООД (Kostinbrod, Bulgaria), all invoice layouts since 2021: BGN only, BGN with 2022 government compensation, dual EUR/BGN, and EUR only.
+> - 🇬🇧 Outfox Energy (UK), the gas part of dual-fuel statements, in GBP.
+>
 > Your supplier is missing? **[Add your supplier](#-add-your-supplier)**. It takes 2 minutes and no personal data leaves your home.
 
 ### Features
 
 - 🖱️ **Drag & drop upload:** drop many PDFs or ZIPs onto the dashboard card, no YAML needed.
-- 📊 **Energy dashboard ready:** three statistics: `consumption` (m³), `energy` (kWh) and `cost` (€).
+- 📊 **Energy dashboard ready:** three statistics: `consumption` (m³), `energy` (kWh) and `cost` (in the invoice currency: €, £, …).
+- 💷 **Invoice currency:** cost is stored in the currency printed on the invoice. BGN-only invoices are converted to EUR at the fixed rate.
+- 🧮 **Standing charges** are spread evenly over the days of the period; only the unit charges follow your consumption.
 - 🌡️ **Realistic daily profile:** heating is spread by hourly [Open-Meteo](https://open-meteo.com/) temperatures at your location; hot water and cooking are spread evenly.
 - 🧾 **Clear upload report:** new / already uploaded / duplicates / skipped, with duplicates detected by invoice number.
 - 🕳️ **Gap filling:** missing invoices are filled from meter readings (the cost for those periods is estimated).
-- 🔁 **Meter replacements** and **currency changes** (BGN → EUR) are handled automatically.
+- 🔁 **Meter replacements**, **estimated readings** (replaced when an invoice with actual readings for the same period arrives), **overlapping invoices** (the one issued later wins) and **currency changes** (BGN → EUR) are handled automatically.
 - 🎨 **Three card layouts:** `tiles`, `chips` and `list`, in light and dark themes.
 - 🔒 **Privacy first:** invoices stay in your Home Assistant, and the diagnostics tool masks personal data before you share anything.
 - 🤖 **Automation friendly:** an import button, the `gas_invoices.import_invoices` action with response, an optional nightly import, and the `gas_invoices_imported` event (for Node-RED too).
@@ -70,7 +75,7 @@ _or_ go to **Settings → Devices & services → Add integration → Gas Invoice
    - **Gas consumption** → **Gas consumption (invoices)** (`gas_invoices:consumption`)
    - **Costs** → *Use an entity tracking the total costs* → **Gas cost (invoices)** (`gas_invoices:cost`)
 
-   With the Bulgarian UI the names are *Газ консумация / Газ разход (фактури)*. The cost is in EUR, so set **Settings → System → General → Currency** to Euro.
+   With the Bulgarian UI the names are *Газ консумация / Газ разход (фактури)*. The cost is in the currency of your invoices (EUR for Bulgarian suppliers, GBP for UK suppliers), so set **Settings → System → General → Currency** to the same currency.
 
 > Home Assistant writes statistics in the background. With several years of data, allow 1–2 minutes before the charts fill in.
 
@@ -132,6 +137,8 @@ data:
 
 Every import rebuilds the whole history from all PDFs in the folder and overwrites the existing values, so it is safe to run as often as you like. The action returns a summary (invoices, totals, gaps, warnings). The same summary is fired as the `gas_invoices_imported` event.
 
+> **Upgrading from 1.3:** the action response and the `gas_invoices_imported` event now contain `total` and `currency` instead of `total_eur`.
+
 <details>
 <summary>Entities</summary>
 
@@ -149,7 +156,7 @@ Every import rebuilds the whole history from all PDFs in the folder and overwrit
 Every supplier formats its invoices differently, so each one needs its own small parser. You can help **without sharing any personal data**:
 
 1. In Home Assistant open **Settings → Devices & services → Gas Invoices → Configure → Invoice diagnostics**.
-2. Choose one of your PDF invoices. The file is **not stored**. The integration only extracts its text and masks personal data: name, address, personal ID (ЕГН), customer number, phone, e-mail and IBAN.
+2. Choose one of your PDF invoices. The file is **not stored**. The integration only extracts its text and masks personal data: name, address, personal ID (ЕГН), customer and account numbers, meter identifiers (MPAN, MPRN, serial), postcode, phone, e-mail and IBAN.
 3. Review the text. If something personal is still visible, run it again and list those words in **Also hide**.
 4. Open a **[new supplier request](https://github.com/Myxomopka666/ha-gas-invoice/issues/new?template=new_supplier.yml)** and paste the text together with the expected values (m³, kWh, total).
 
@@ -180,14 +187,14 @@ Ideas and planned improvements. Contributions and feedback are welcome in [issue
 ### More suppliers
 Overgas, Citygas, Aresgas, Sofiagas and others, driven by [supplier requests](#-add-your-supplier).
 
-### Any currency (GBP, USD, CNY, …)
-Today the cost statistic is written in EUR, and BGN invoices are converted at the fixed euro rate. Planned:
+### Currency conversion
+Since 1.4 the cost is stored in the currency of the invoice. Planned: when the invoice currency differs from Home Assistant's currency, convert with the **historical exchange rate on the invoice date** (ECB reference rates) and show the rate in the import summary.
 
-- Each supplier parser reports the amount **together with its currency**, read from the invoice.
-- The cost statistic uses the **currency configured in Home Assistant** (*Settings → System → General → Currency*), which the Energy dashboard also uses.
-- If the invoice currency matches Home Assistant's currency, amounts are written as they are, with no conversion.
-- If they differ, the amount is converted with the **historical exchange rate on the invoice date** (ECB reference rates), or with a fixed rate for pegged currencies. The rate used is shown in the import summary.
-- A warning is shown when the currency on an invoice can't be determined.
+### Language setting
+Runtime messages are in English. Planned: a **language** option in the integration settings: `auto` (Home Assistant's language, default), `EN`, `BG`, `RU`.
+
+### Estimated readings rolled forward
+Today an estimated invoice is replaced when an invoice with actual readings for the **same period** arrives. Planned: when the next invoice instead starts from the estimated reading and ends on an actual one, spread the gas across both periods (from actual reading to actual reading).
 
 ### Hourly or daily data from the invoice
 Some suppliers (smart meters, detailed statements) include consumption **per day or per hour**. The data model already supports this: an invoice is a list of measured segments, and today one segment usually covers a whole month. Planned:
@@ -213,9 +220,9 @@ Parsers live in `custom_components/gas_invoices/suppliers/`. Each module defines
 - **Настройка:** бутонът **„Add integration“** или Settings → Devices & services → Add integration → **Gas Invoices**.
 - **Качване:** с drag & drop в картата `custom:gas-invoices-card`, или от **Configure → Качи фактури** (PDF или ZIP).
 - **Разпределение:** консумацията и цената се разпределят по дните от периода на фактурата, според температурите.
-- **Energy таблото:** Gas → „Газ консумация (фактури)“, за цената „Газ разход (фактури)“. Валутата в HA трябва да е евро.
-- **Поддържани фактури:** засега Костинбродгаз, всички формати от 2021 г. насам.
-- **Планирано:** още доставчици, фактури във всяка валута (GBP, USD, CNY…) и използване на дневни или часови данни, ако фактурата ги съдържа. Виж [Roadmap](#roadmap).
+- **Energy таблото:** Gas → „Газ консумация (фактури)“, за цената „Газ разход (фактури)“. Цената е във валутата на фактурата (евро за българските доставчици) - валутата в HA трябва да е същата.
+- **Поддържани фактури:** Костинбродгаз (всички формати от 2021 г. насам) и Outfox Energy (Великобритания).
+- **Планирано:** още доставчици, превалутиране по курса на ЕЦБ, настройка за език (auto/EN/BG/RU) и използване на дневни или часови данни, ако фактурата ги съдържа. Виж [Roadmap](#roadmap).
 - **Друг доставчик?** Configure → **Диагностика на фактура** дава текста на фактурата без лични данни. Изпрати го в [заявка за нов доставчик](https://github.com/Myxomopka666/ha-gas-invoice/issues/new?template=new_supplier.yml). **Не прикачвай PDF-а.**
 
 ## License

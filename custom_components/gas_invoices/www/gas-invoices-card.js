@@ -6,7 +6,7 @@
  *   layout: tiles        # tiles (default) | chips | list
  *   title: Газ           # optional
  */
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.4.0";
 console.info(
   `%c GAS-INVOICES-CARD %c v${CARD_VERSION} `,
   "color:#fff;background:#1e78e6;font-weight:bold",
