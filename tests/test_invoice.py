@@ -295,3 +295,33 @@ def test_outfox_imperial_meter():
 def test_outfox_number_falls_back_to_statement_date():
     i = inv.parse_text(OUTFOX.replace("Statement Number: 12345678", "Statement Number: ████"), LON)
     assert i.number == "20260905"
+
+
+SAMPLE_UK = """BALANCE £437.10 CR
+Account Number: 87654321
+Mr John Smith
+12 High Street Statement Number: 12345678
+Anytown AB1 2CD Statement Date: 05/09/2026
+Hi Mr John Smith, Don’t forget to send us your meter readings
+- your read your read 16 0000 0000 001
+MPAN 1600000000001
+02 Sep 26 00 84975.0 84975.0 0.0kWh 20.64074p £0.00 Serial Number AB12C34567
+reading reading 1234567890
+MPRN 1234567890
+VAT £0.83
+Company registration number 09689035, VAT Reg No: GB123456789
+"""
+
+
+def test_redact_uk_personal_data():
+    out, _ = redact.redact(SAMPLE_UK)
+    for secret in ["87654321", "John", "Smith", "High Street", "AB1 2CD", "16 0000 0000 001",
+                   "1600000000001", "AB12C34567", "1234567890", "GB123456789"]:
+        assert secret not in out, secret
+    assert "VAT £0.83" in out and "Statement Number: 12345678" in out
+
+
+def test_redact_keeps_outfox_data():
+    out, _ = redact.redact(OUTFOX)
+    i = inv.parse_text(out, LON)
+    assert i.number == "12345678" and i.m3 == 12.0 and i.total == 17.52 and i.fixed_cost == 9.06
