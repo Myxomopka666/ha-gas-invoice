@@ -196,6 +196,9 @@ Runtime messages are in English. Planned: a **language** option in the integrati
 ### Estimated readings rolled forward
 Today an estimated invoice is replaced when an invoice with actual readings for the **same period** arrives. Planned: when the next invoice instead starts from the estimated reading and ends on an actual one, spread the gas across both periods (from actual reading to actual reading).
 
+### Remove an invoice from the UI
+Today removing an invoice (for example one uploaded by mistake, or from another supplier with a different currency) needs file access to the invoice folder plus an import with `reset: true`. Planned: a **Remove invoices** step under **Configure** that lists the stored invoices (number, period, amount), deletes the selected files and re-imports with a reset automatically.
+
 ### Hourly or daily data from the invoice
 Some suppliers (smart meters, detailed statements) include consumption **per day or per hour**. The data model already supports this: an invoice is a list of measured segments, and today one segment usually covers a whole month. Planned:
 
@@ -222,7 +225,7 @@ Parsers live in `custom_components/gas_invoices/suppliers/`. Each module defines
 - **Разпределение:** консумацията и цената се разпределят по дните от периода на фактурата, според температурите.
 - **Energy таблото:** Gas → „Газ консумация (фактури)“, за цената „Газ разход (фактури)“. Цената е във валутата на фактурата (евро за българските доставчици) - валутата в HA трябва да е същата.
 - **Поддържани фактури:** Костинбродгаз (всички формати от 2021 г. насам) и Outfox Energy (Великобритания).
-- **Планирано:** още доставчици, превалутиране по курса на ЕЦБ, настройка за език (auto/EN/BG/RU) и използване на дневни или часови данни, ако фактурата ги съдържа. Виж [Roadmap](#roadmap).
+- **Планирано:** още доставчици, превалутиране по курса на ЕЦБ, настройка за език (auto/EN/BG/RU), премахване на фактура от интерфейса и използване на дневни или часови данни, ако фактурата ги съдържа. Виж [Roadmap](#roadmap).
 - **Друг доставчик?** Configure → **Диагностика на фактура** дава текста на фактурата без лични данни. Изпрати го в [заявка за нов доставчик](https://github.com/Myxomopka666/ha-gas-invoice/issues/new?template=new_supplier.yml). **Не прикачвай PDF-а.**
 
 ## License
