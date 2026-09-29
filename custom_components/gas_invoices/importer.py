@@ -174,6 +174,28 @@ async def async_import(hass: HomeAssistant, store: Store, opts: dict) -> dict:
     invoices = await hass.async_add_executor_job(
         inv_mod.load_invoices, folder, tz, warnings, texts
     )
+    if not invoices and opts.get(CONF_RESET):
+        # empty folder + reset: just clear the statistics
+        get_instance(hass).async_clear_statistics([STAT_M3, STAT_KWH, STAT_COST])
+        result = {
+            "imported_at": dt_util.utcnow().isoformat(),
+            "folder": str(folder),
+            "invoices": 0,
+            "hours": 0,
+            "from": None,
+            "to": None,
+            "total_m3": 0.0,
+            "total": 0.0,
+            "currency": None,
+            "last_invoice": None,
+            "gaps": [],
+            "gaps_filled": bool(opts[CONF_FILL_GAPS]),
+            "warnings": [*warnings, f"No invoices in {folder}: statistics cleared"],
+        }
+        cache["last_result"] = result
+        await store.async_save(cache)
+        _LOGGER.info("No invoices in %s: statistics cleared", folder)
+        return result
     if not invoices:
         raise HomeAssistantError(
             translation_domain=DOMAIN,

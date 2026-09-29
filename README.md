@@ -132,7 +132,7 @@ Uploading from the card requires an administrator account.
 ```yaml
 action: gas_invoices.import_invoices
 data:
-  reset: false   # true = clear the statistics first (after removing an invoice)
+  reset: false   # true = clear the statistics first (after removing an invoice); with an empty folder it only clears them
 ```
 
 Every import rebuilds the whole history from all PDFs in the folder and overwrites the existing values, so it is safe to run as often as you like. The action returns a summary (invoices, totals, gaps, warnings). The same summary is fired as the `gas_invoices_imported` event.
