@@ -53,19 +53,19 @@ P00000002 17-03-2026 10:00:00 6450 01-04-2026 07:00:00 6539 89 1.000000 89.00
 def test_eur_only():
     i = inv.parse_text(EUR_ONLY, TZ)
     assert i.number == "0100000001"
-    assert i.m3 == 274 and i.total_eur == 187.20 and not i.eur_from_bgn
+    assert i.m3 == 274 and i.total == 187.20 and not i.eur_from_bgn
     assert round(i.kwh) == 2943
 
 
 def test_dual_currency_prefers_eur():
     i = inv.parse_text(DUAL, TZ)
-    assert i.total_eur == 64.90 and i.total_bgn == 126.95
+    assert i.total == 64.90 and i.total_bgn == 126.95 and i.currency == "EUR"
 
 
 def test_bgn_only_converted():
     i = inv.parse_text(BGN_ONLY, TZ)
     assert i.total_bgn == 285.05 and i.eur_from_bgn
-    assert i.total_eur == round(285.05 / inv.BGN_PER_EUR, 2)
+    assert i.total == round(285.05 / inv.BGN_PER_EUR, 2)
     assert i.segments[0].meter == "" and i.calorific is None
 
 
@@ -129,9 +129,41 @@ def test_redact_masks_personal_data():
 def test_redact_keeps_invoice_data():
     out, _ = redact.redact(EUR_ONLY)
     i = inv.parse_text(out, TZ)
-    assert i.number == "0100000001" and i.m3 == 274 and i.total_eur == 187.20
+    assert i.number == "0100000001" and i.m3 == 274 and i.total == 187.20
 
 
 def test_redact_valid_egn_anywhere():
     out, _ = redact.redact("нещо 7501020018 и 0100123131")
     assert "7501020018" not in out and "0100123131" in out
+
+
+def test_bgn_converted_currency_is_eur():
+    i = inv.parse_text(BGN_ONLY, TZ)
+    assert i.currency == "EUR" and i.eur_from_bgn
+
+
+def test_as_dict_has_currency_and_cost():
+    d = inv.parse_text(EUR_ONLY, TZ).as_dict(TZ)
+    assert d["cost"] == 187.20 and d["currency"] == "EUR" and d["fixed_cost"] == 0.0
+    assert d["price_per_m3"] == round(187.20 / 274, 4) and d["estimated_read"] is False
+
+
+def test_fixed_cost_spread_evenly():
+    i = inv.parse_text(EUR_ONLY, TZ)
+    i.fixed_cost = 31.0
+    hours = list(inv.hour_range(i.start, i.end))
+    temps = {h: (25.0 if n % 2 else 0.0) for n, h in enumerate(hours)}  # every other hour warm
+    out = inv.distribute([i], temps, 18.0, 0.0, [])
+    per_hour = 31.0 / len(hours)
+    warm = [out[h] for n, h in enumerate(hours) if n % 2]
+    assert all(r[0] == 0 and abs(r[2] - per_hour) < 1e-9 for r in warm)
+    assert abs(sum(r[2] for r in out.values()) - 187.20) < 1e-6
+
+
+def test_gap_estimates_fixed_cost_per_day():
+    a = inv.parse_text(EUR_ONLY, TZ)
+    b = inv.parse_text(METER_SWAP, TZ)
+    a.fixed_cost = b.fixed_cost = 31.0  # ~1 per day
+    gap = inv.find_gaps([a, b], [])[0]
+    assert gap.number == "GAP" and gap.fixed_cost == pytest.approx(28, abs=0.05)
+    assert gap.currency == "EUR"

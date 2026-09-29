@@ -112,8 +112,9 @@ def load_invoices(
 
 
 def find_gaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
-    """Дупки между фактурите. При същия разходомер количеството се знае от
-    показанията; цената се оценява по средната €/m³ на съседните фактури."""
+    """Gaps between invoices. With the same meter the volume is known from the
+    readings; the price and the fixed cost per day are averaged from the
+    neighbouring invoices."""
     gaps = []
     for a, b in zip(invs, invs[1:]):
         if b.start <= a.end:
@@ -122,14 +123,18 @@ def find_gaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
         same_meter = not sa.meter or not sb.meter or sa.meter == sb.meter
         m3 = sb.start_reading - sa.end_reading if same_meter else -1
         if m3 < 0:
-            warnings.append(
-                f"дупка {a.end:%d.%m.%Y} - {b.start:%d.%m.%Y}: не може да се изчисли"
-            )
+            warnings.append(f"gap {a.end:%d.%m.%Y} - {b.start:%d.%m.%Y}: cannot be calculated")
             continue
-        price = (a.total_eur / a.m3 + b.total_eur / b.m3) / 2 if a.m3 and b.m3 else 0.0
+        price = (a.variable_cost / a.m3 + b.variable_cost / b.m3) / 2 if a.m3 and b.m3 else 0.0
+        fixed_per_day = (
+            (a.fixed_cost / a.days + b.fixed_cost / b.days) / 2 if a.days and b.days else 0.0
+        )
+        fixed = round(fixed_per_day * (b.start - a.end).total_seconds() / 86400, 2)
         cal = ((a.calorific or DEFAULT_CALORIFIC) + (b.calorific or DEFAULT_CALORIFIC)) / 2
-        gap = Invoice(number="ДУПКА", date="", file="", calorific=cal,
-                      total_eur=round(m3 * price, 2), estimated=True)
+        gap = Invoice(
+            number="GAP", date="", file="", calorific=cal, total=round(m3 * price + fixed, 2),
+            currency=a.currency, fixed_cost=fixed, estimated=True,
+        )
         gap.segments.append(
             Segment(sa.meter or sb.meter, a.end, b.start, sa.end_reading, sb.start_reading, m3)
         )
@@ -163,22 +168,34 @@ def distribute(
     base_load: float | None,
     warnings: list[str],
 ) -> dict[datetime, list[float]]:
-    """Връща {час(UTC): [m3, kWh, EUR]}.
+    """Returns {hour (UTC): [m3, kWh, cost]}.
 
-    base_load=None -> автоматично за всяка фактура (base_load_for).
-    temps=None -> равномерно разпределение.
+    Variable cost follows the gas volume; the fixed cost (standing charge) is
+    spread evenly over the invoice period.
+    base_load=None -> automatic per invoice (base_load_for).
+    temps=None -> even distribution.
     """
     out: dict[datetime, list[float]] = {}
     for inv in invs:
-        eur_per_m3 = inv.total_eur / inv.m3 if inv.m3 else 0.0
         kwh_per_m3 = (inv.calorific or DEFAULT_CALORIFIC) * 1000
         bl = base_load_for(inv, invs) if base_load is None else base_load
+        parts = []
         for seg in inv.segments:
             hours = list(hour_range(seg.start, seg.end))
             frac = [
                 (min(h + timedelta(hours=1), seg.end) - max(h, seg.start)).total_seconds() / 3600
                 for h in hours
             ]
+            parts.append((seg, hours, frac))
+        inv_hours = sum(sum(frac) for _, _, frac in parts)
+        if not inv_hours:
+            continue
+        total = inv.total or 0.0
+        fixed = inv.fixed_cost if inv.m3 else total
+        cost_per_m3 = (total - fixed) / inv.m3 if inv.m3 else 0.0
+        fixed_per_hour = fixed / inv_hours
+
+        for seg, hours, frac in parts:
             total_frac = sum(frac)
             if not total_frac:
                 continue
@@ -192,7 +209,7 @@ def distribute(
                     if sum(weights) <= 0:
                         weights = None
                 else:
-                    warnings.append(f"{inv.number}: липсват температури, разпределено равномерно")
+                    warnings.append(f"{inv.number}: temperatures missing, distributed evenly")
             if weights is None:
                 weights = frac
             sw = sum(weights)
@@ -202,5 +219,5 @@ def distribute(
                 row = out.setdefault(h, [0.0, 0.0, 0.0])
                 row[0] += m3
                 row[1] += m3 * kwh_per_m3
-                row[2] += m3 * eur_per_m3
+                row[2] += m3 * cost_per_m3 + f * fixed_per_hour
     return out

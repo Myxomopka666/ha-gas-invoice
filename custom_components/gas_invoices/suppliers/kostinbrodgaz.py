@@ -47,16 +47,16 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
     #  2022: компенсация по РМС -> реално платеното е "Стойност за плащане 379.55"
     i = text.find("Сума за плащане")
     zone = text[i : i + 120] if i >= 0 else ""
-    inv.total_eur = first(RE_EUR, zone)
+    inv.total = first(RE_EUR, zone)
     if m := re.search(rf"Стойност за плащане\s*:?\s*(-?{NUM})", text):
         inv.total_bgn = num(m.group(1))
         inv.compensated = True
     else:
         inv.total_bgn = first(RE_BGN, zone)
-        if inv.total_bgn is None and inv.total_eur is None:
+        if inv.total_bgn is None and inv.total is None:
             if m := re.search(rf"Сума за плащане\s*:?\s*({NUM})", text):
                 inv.total_bgn = num(m.group(1))
     to_eur(inv)
-    if inv.total_eur is None:
+    if inv.total is None:
         raise ValueError("не намирам сума за плащане")
     return inv
