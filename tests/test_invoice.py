@@ -321,6 +321,11 @@ def test_redact_uk_personal_data():
     assert "VAT £0.83" in out and "Statement Number: 12345678" in out
 
 
+def test_redact_title_name_with_curly_apostrophe():
+    out, _ = redact.redact("Dear Mr O’Brien Smith,")
+    assert "Brien" not in out and "Smith" not in out and out.startswith("Dear Mr ")
+
+
 def test_redact_keeps_outfox_data():
     out, _ = redact.redact(OUTFOX)
     i = inv.parse_text(out, LON)

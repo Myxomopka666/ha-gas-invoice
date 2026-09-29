@@ -13,7 +13,7 @@ import re
 
 MASK = "████"
 
-# этикет -> маскира се стойността след него (до края на реда или до следващия етикет)
+# етикет -> маскира се стойността след него (до края на реда или до следващия етикет)
 _ID_LABELS = (
     r"Идент\.?\s*№|ЕГН|ЛНЧ|ЕИК|БУЛСТАТ|Булстат|ИН\s*по\s*ДДС|ДДС\s*№|"
     r"VAT\s*(?:Reg(?:istration)?\.?\s*)?(?:No\.?|Number)|"
@@ -44,7 +44,7 @@ RE_MPAN_SPACED = re.compile(r"\b\d{2} \d{4} \d{4} \d{3}\b")
 RE_VAT_GB = re.compile(r"\bGB ?\d{3} ?\d{4} ?\d{2}(?: ?\d{3})?\b")
 RE_POSTCODE = re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}\b")
 RE_TITLE_NAME = re.compile(
-    r"\b(Mr|Mrs|Ms|Miss|Mx|Dr)\.?([ \t]+)[A-Z][A-Za-z''-]+(?:[ \t]+[A-Z][A-Za-z''-]+){0,2}"
+    r"\b(Mr|Mrs|Ms|Miss|Mx|Dr)\.?([ \t]+)[A-Z][A-Za-z'\u2019-]+(?:[ \t]+[A-Z][A-Za-z'\u2019-]+){0,2}"
 )
 RE_STREET = re.compile(
     r"\b\d+[A-Za-z]?[ \t]+(?:[A-Z][a-z]+[ \t]+){1,3}"
