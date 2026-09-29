@@ -14,9 +14,7 @@ Track your **natural gas consumption and cost** in the Home Assistant **Energy d
 
 Your gas invoice arrives weeks after the billing period ends. Gas Invoices reads the PDF and extracts the billing period, meter readings, volume (m³), calorific value and amount due. It then **back-fills Home Assistant's long-term statistics for the actual days of the billing period**, not the day the invoice arrived. The Energy dashboard shows gas the same way it shows electricity: by day, month and year, with cost.
 
-> **Supported suppliers:**
-> - 🇧🇬 КОСТИНБРОДГАЗ ООД (Kostinbrod, Bulgaria), all invoice layouts since 2021: BGN only, BGN with 2022 government compensation, dual EUR/BGN, and EUR only.
-> - 🇬🇧 Outfox Energy (UK), the gas part of dual-fuel statements, in GBP.
+> **Supported suppliers:** КОСТИНБРОДГАЗ (Bulgaria) and Outfox Energy (UK). See the **[full list](#-supported-suppliers)**.
 >
 > Your supplier is missing? **[Add your supplier](#-add-your-supplier)**. It takes 2 minutes and no personal data leaves your home.
 
@@ -34,6 +32,15 @@ Your gas invoice arrives weeks after the billing period ends. Gas Invoices reads
 - 🔒 **Privacy first:** invoices stay in your Home Assistant, and the diagnostics tool masks personal data before you share anything.
 - 🤖 **Automation friendly:** an import button, the `gas_invoices.import_invoices` action with response, an optional nightly import, and the `gas_invoices_imported` event (for Node-RED too).
 - 🌎 **English and Bulgarian** translations.
+
+## 🏭 Supported suppliers
+
+| Supplier | Contributed by | Country | Currency | Supported invoices |
+|---|---|---|---|---|
+| КОСТИНБРОДГАЗ ООД | [@Myxomopka666](https://github.com/Myxomopka666) | 🇧🇬 Bulgaria | EUR (BGN converted) | All layouts since 2021: BGN only, BGN with 2022 government compensation, dual EUR/BGN, EUR only |
+| Outfox Energy | [@robinelvin](https://github.com/robinelvin) ([#1](https://github.com/Myxomopka666/ha-gas-invoice/issues/1)) | 🇬🇧 United Kingdom | GBP | Gas part of dual-fuel statements, metric and imperial meters |
+
+Your supplier is missing? **[Add your supplier](#-add-your-supplier)**. Everyone who helps add a supplier is credited here.
 
 ## Installation
 
@@ -224,7 +231,7 @@ Parsers live in `custom_components/gas_invoices/suppliers/`. Each module defines
 - **Качване:** с drag & drop в картата `custom:gas-invoices-card`, или от **Configure → Качи фактури** (PDF или ZIP).
 - **Разпределение:** консумацията и цената се разпределят по дните от периода на фактурата, според температурите.
 - **Energy таблото:** Gas → „Газ консумация (фактури)“, за цената „Газ разход (фактури)“. Цената е във валутата на фактурата (евро за българските доставчици) - валутата в HA трябва да е същата.
-- **Поддържани фактури:** Костинбродгаз (всички формати от 2021 г. насам) и Outfox Energy (Великобритания).
+- **Поддържани фактури:** Костинбродгаз (всички формати от 2021 г. насам) и Outfox Energy (Великобритания). Пълният списък с автор за всеки доставчик е в [Supported suppliers](#-supported-suppliers).
 - **Планирано:** още доставчици, превалутиране по курса на ЕЦБ, настройка за език (auto/EN/BG/RU), премахване на фактура от интерфейса и използване на дневни или часови данни, ако фактурата ги съдържа. Виж [Roadmap](#roadmap).
 - **Друг доставчик?** Configure → **Диагностика на фактура** дава текста на фактурата без лични данни. Изпрати го в [заявка за нов доставчик](https://github.com/Myxomopka666/ha-gas-invoice/issues/new?template=new_supplier.yml). **Не прикачвай PDF-а.**
 
