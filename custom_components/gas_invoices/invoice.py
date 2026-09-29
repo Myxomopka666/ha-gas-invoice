@@ -148,6 +148,16 @@ def resolve_overlaps(invs: list[Invoice], warnings: list[str]) -> list[Invoice]:
             warnings.append(
                 f"{old.number}: {start:%d.%m.%Y} - {end:%d.%m.%Y} replaced by newer invoice {new.number}"
             )
+    for old in kept:
+        if id(old) in dropped or not old.superseded:
+            continue
+        covered = old.start
+        for s, e in sorted(old.superseded):
+            if s <= covered:
+                covered = max(covered, e)
+        if covered >= old.end:
+            dropped.add(id(old))
+            warnings.append(f"{old.number}: replaced by newer invoices")
     return [i for i in kept if id(i) not in dropped]
 
 

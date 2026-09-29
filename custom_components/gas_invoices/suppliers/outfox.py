@@ -37,6 +37,7 @@ RE_NET = re.compile(rf"Net Gas Charges For Period[ \t]*£({UNUM})")
 RE_FACTOR = re.compile(rf"Volume conversion factor[ \t]*[×x][ \t]*({UNUM})")
 RE_CORRECTION = re.compile(rf"Volume correction[ \t]*[×x][ \t]*({UNUM})")
 RE_CV = re.compile(rf"Calorific value[ \t]*[×x][ \t]*({UNUM})")
+RE_SERIAL = re.compile(r"Serial Number[ 	]+([A-Z0-9]{5,})")
 RE_STATEMENT = re.compile(r"Statement Number:[ \t]*(\d+)")
 RE_STATEMENT_DATE = re.compile(r"Statement Date:[ \t]*(\d{2})/(\d{2})/(\d{4})")
 
@@ -85,13 +86,16 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
         number=number, date=date, file=filename, supplier=KEY, currency="GBP", total=total
     )
     factor = _opt(RE_FACTOR, text) or 1.0
+    meter = m.group(1) if (m := RE_SERIAL.search(section)) else ""
     period_end = day(period.group(2), tz, plus=1)
     kwh = unit_charges = 0.0
     for i, r in enumerate(rows):
         start = day(r.group(1), tz)
         end = day(rows[i + 1].group(1), tz) if i + 1 < len(rows) else period_end
         r1, r2 = unum(r.group(2)), unum(r.group(3))
-        inv.segments.append(Segment("", start, end, r1, r2, round((r2 - r1) * factor, 3)))
+        inv.segments.append(
+            Segment(meter, start, end, r1 * factor, r2 * factor, round((r2 - r1) * factor, 3))
+        )
         kwh += unum(r.group(4))
         unit_charges += unum(r.group(6))
         if "estimat" in r.group(7).lower():

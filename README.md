@@ -137,7 +137,7 @@ data:
 
 Every import rebuilds the whole history from all PDFs in the folder and overwrites the existing values, so it is safe to run as often as you like. The action returns a summary (invoices, totals, gaps, warnings). The same summary is fired as the `gas_invoices_imported` event.
 
-> **Upgrading from 1.3:** the action response and the `gas_invoices_imported` event now contain `total` and `currency` instead of `total_eur`.
+> **Upgrading from 1.3:** the action response and the `gas_invoices_imported` event now contain `total` and `currency` instead of `total_eur`. The `Invoices` sensor attribute `total_eur` is likewise replaced by `total` plus `currency`, so update any templates or automations that use it.
 
 <details>
 <summary>Entities</summary>
@@ -156,7 +156,7 @@ Every import rebuilds the whole history from all PDFs in the folder and overwrit
 Every supplier formats its invoices differently, so each one needs its own small parser. You can help **without sharing any personal data**:
 
 1. In Home Assistant open **Settings → Devices & services → Gas Invoices → Configure → Invoice diagnostics**.
-2. Choose one of your PDF invoices. The file is **not stored**. The integration only extracts its text and masks personal data: name, address, personal ID (ЕГН), customer and account numbers, meter identifiers (MPAN, MPRN, serial), postcode, phone, e-mail and IBAN.
+2. Choose one of your PDF invoices. The file is **not stored**. The integration only extracts its text and masks personal data (best effort): name, address, personal ID (ЕГН), customer and account numbers, meter identifiers (MPAN, MPRN, serial), postcode, phone, e-mail and IBAN.
 3. Review the text. If something personal is still visible, run it again and list those words in **Also hide**.
 4. Open a **[new supplier request](https://github.com/Myxomopka666/ha-gas-invoice/issues/new?template=new_supplier.yml)** and paste the text together with the expected values (m³, kWh, total).
 
@@ -201,7 +201,7 @@ Some suppliers (smart meters, detailed statements) include consumption **per day
 
 - Parsers return **one segment per day or hour** when the invoice provides it.
 - These values are written **as they are**. Temperature-based distribution is used only for periods the invoice doesn't break down (for example, spreading one day over its hours).
-- **Per-segment cost** for time-of-use tariffs (day/night prices), instead of one average €/m³ per invoice.
+- **Per-segment cost** for time-of-use tariffs (day/night prices), instead of one average price per m³ per invoice.
 - The import summary shows which periods are measured and which are estimated.
 
 ### Other ideas

@@ -32,6 +32,11 @@ RE_NAME_AFTER = re.compile(rf"(\b(?:{_NAME_LABELS})[ \t]*:[ \t]*)([^\n:]*?)(?=[ 
 RE_IBAN = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{4}\d{6,18}\b")
 RE_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 RE_PHONE = re.compile(r"(?:\+359|00359)[\s-]?\d[\d\s-]{6,12}\d|(?<![\d.,])08[789][\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}(?![\d.,])")
+_UK_MOBILE = r"7\d{3}[ -]?\d{6}"
+_UK_LAND = r"[12]\d{3}[ -]\d{5,6}|[12]\d[ -]\d{4}[ -]?\d{4}"  # a separator is required
+RE_UK_PHONE = re.compile(
+    rf"(?<![\d.,])(?:(?:\+44|0044)[ -]?\(?0?\)?[ -]?|0)(?:{_UK_MOBILE}|{_UK_LAND})(?![\d.,])"
+)
 # three consecutive words starting with a capital Cyrillic letter (First Middle Last)
 RE_FULLNAME = re.compile(r"\b[А-Я][а-я]+(?:-[А-Я][а-я]+)?\s+[А-Я][а-я]+\s+[А-Я][а-я]+(?:-[А-Я][а-я]+)?\b")
 # a line that is only two capitalised words (e.g. an employee/customer name on its own line)
@@ -44,7 +49,7 @@ RE_MPAN_SPACED = re.compile(r"\b\d{2} \d{4} \d{4} \d{3}\b")
 RE_VAT_GB = re.compile(r"\bGB ?\d{3} ?\d{4} ?\d{2}(?: ?\d{3})?\b")
 RE_POSTCODE = re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}\b")
 RE_TITLE_NAME = re.compile(
-    r"\b(Mr|Mrs|Ms|Miss|Mx|Dr)\.?([ \t]+)[A-Z][A-Za-z'\u2019-]+(?:[ \t]+[A-Z][A-Za-z'\u2019-]+){0,2}"
+    r"\b(Mr|Mrs|Ms|Miss|Mx|Dr)\.?([ \t]+)[A-Z][A-Za-z'\u2019-]+(?:[ \t]+(?!(?:Statement|Account|Date|Number|Customer|Reference|Your|Balance)\b)[A-Z][A-Za-z'\u2019-]+){0,2}"
 )
 RE_STREET = re.compile(
     r"\b\d+[A-Za-z]?[ \t]+(?:[A-Z][a-z]+[ \t]+){1,3}"
@@ -97,6 +102,7 @@ def redact(text: str, extra: list[str] | None = None) -> tuple[str, int]:
     out = sub(RE_FULLNAME, MASK, out)
     out = sub(RE_NAME_LINE, MASK, out)
     out = sub(RE_PHONE, MASK, out)
+    out = sub(RE_UK_PHONE, MASK, out)
     out = sub(RE_10DIGITS, lambda m: MASK if _is_egn(m.group(0)) else m.group(0), out)
     out = sub(RE_MPAN_SPACED, MASK, out)
     out = sub(RE_VAT_GB, MASK, out)

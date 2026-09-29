@@ -362,3 +362,42 @@ def test_parser_errors_in_english():
         inv.parse_text("nothing here", TZ)
     with pytest.raises(ValueError, match="invoice number not found"):
         inv.parse_text("КОСТИНБРОДГАЗ ООД", TZ)
+
+
+# ------------------------------------------------------------ final review fixes
+def test_outfox_imperial_gap_volume_in_m3():
+    text = OUTFOX.replace("Volume conversion factor × 1.0", "Volume conversion factor × 2.83")
+    a = inv.parse_text(text, LON)
+    s = a.segments[0]
+    later = timedelta(days=33)  # a gap of 2 days after a.end
+    # the next statement starts reading 6 raw units after 22894.0
+    seg = inv.Segment("", s.start + later, s.end + later, 22900.0 * 2.83, 22912.0 * 2.83, 33.96)
+    b = dataclasses.replace(a, number="99999999", segments=[seg])
+    w = []
+    gaps = inv.find_gaps([a, b], w)
+    assert len(gaps) == 1 and gaps[0].segments[0].m3 == pytest.approx(6 * 2.83, abs=0.01)
+
+
+def test_outfox_meter_serial_used_as_meter_id():
+    text = OUTFOX.replace("02 Sep 26 Serial Number ████", "02 Sep 26 Serial Number G4A1234567")
+    assert inv.parse_text(text, LON).segments[0].meter == "G4A1234567"
+    assert inv.parse_text(OUTFOX, LON).segments[0].meter == ""
+
+
+def test_invoice_covered_by_union_of_newer_invoices_is_dropped():
+    old = _span("OLD", "01-02-2026", (1, 1), (1, 21))
+    n1 = _span("N1", "10-02-2026", (1, 1), (1, 11))
+    n2 = _span("N2", "11-02-2026", (1, 10), (1, 21))
+    w = []
+    out = inv.resolve_overlaps([old, n1, n2], w)
+    assert out == [n1, n2] and "OLD: replaced by newer invoices" in w
+
+
+def test_redact_title_name_does_not_swallow_label():
+    out, _ = redact.redact("Mrs Jane Doe Statement Date: 05/09/2026")
+    assert "Statement Date: 05/09/2026" in out and "Jane" not in out and "Doe" not in out
+
+
+def test_redact_uk_phone_numbers():
+    out, _ = redact.redact("Call 07700 900123 or +44 20 7946 0958 or 020 7946 0958 today")
+    assert "900123" not in out and "7946" not in out
