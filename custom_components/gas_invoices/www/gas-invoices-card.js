@@ -41,6 +41,11 @@ const TEXT = {
     noSensor: "Интеграцията Gas Invoices не е намерена.",
     warnings: "Предупреждения",
     close: "Затвори",
+    layout: "Изглед",
+    titleLabel: "Заглавие",
+    tiles: "Плочки",
+    chips: "Чипове",
+    list: "Списък",
   },
   en: {
     title: "Gas invoices",
@@ -66,6 +71,11 @@ const TEXT = {
     noSensor: "Gas Invoices integration not found.",
     warnings: "Warnings",
     close: "Close",
+    layout: "Layout",
+    titleLabel: "Title",
+    tiles: "Tiles",
+    chips: "Chips",
+    list: "List",
   },
 };
 
@@ -97,6 +107,15 @@ const curSym = (code, lang) => {
   } catch (e) {
     return code;
   }
+};
+
+// Period end. Whole-day periods end at midnight of the day AFTER the last day,
+// so a "T00:00:00" end time is shown as the previous calendar day. Done on the
+// date part of the string, independent of the browser's time zone.
+const periodEnd = (s) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T00:00:00(?:\.0+)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(s);
+  if (!m) return new Date(s);
+  return new Date(+m[1], +m[2] - 1, +m[3] - 1, 12); // local noon, avoids DST edges
 };
 
 class GasInvoicesCard extends HTMLElement {
@@ -135,6 +154,10 @@ class GasInvoicesCard extends HTMLElement {
     const opts = { columns: 12, min_columns: layout === "tiles" ? 6 : 4, rows: "auto" };
     opts.min_rows = layout === "tiles" ? 4 : layout === "chips" ? 3 : 4;
     return opts;
+  }
+
+  static getConfigElement() {
+    return document.createElement("gas-invoices-card-editor");
   }
 
   static getStubConfig() {
@@ -244,8 +267,10 @@ class GasInvoicesCard extends HTMLElement {
     const lang = this._hass.locale?.language || this._hass.language;
     const n = (v, d = 2) => fmt(v, d, lang);
     const sym = (c) => curSym(c, lang);
-    const date = (s) =>
-      s ? new Date(s).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) : "–";
+    const date = (s, end) =>
+      s
+        ? (end ? periodEnd(s) : new Date(s)).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" })
+        : "–";
     return {
       found: !!e.invoices,
       count: e.invoices?.state ?? "–",
@@ -256,7 +281,7 @@ class GasInvoicesCard extends HTMLElement {
       lastCost: n(e.cost?.state),
       price: n(e.price?.state, 3),
       from: date(e.m3?.attributes.from),
-      to: date(e.m3?.attributes.to),
+      to: date(e.m3?.attributes.to, true),
       warnings: inv.warnings || [],
       n,
       sym,
@@ -558,6 +583,49 @@ const STYLES = `
   }
 `;
 
+// Visual editor: a single ha-form, so HA shows the Config / Visibility / Layout tabs.
+class GasInvoicesCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+    this._update();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._update();
+  }
+
+  get _t() {
+    return (this._hass?.language || "en").startsWith("bg") ? TEXT.bg : TEXT.en;
+  }
+
+  _update() {
+    if (!this._config) return;
+    if (!this._form) {
+      this._form = document.createElement("ha-form");
+      this._form.addEventListener("value-changed", (ev) => {
+        ev.stopPropagation();
+        const config = { type: this._config.type, ...ev.detail.value };
+        if (!config.title) delete config.title;
+        this._config = config;
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
+      });
+      this.appendChild(this._form);
+    }
+    const t = this._t;
+    this._form.hass = this._hass;
+    this._form.data = this._config;
+    this._form.schema = [
+      {
+        name: "layout",
+        selector: { select: { mode: "dropdown", options: LAYOUTS.map((l) => ({ value: l, label: t[l] })) } },
+      },
+      { name: "title", selector: { text: {} } },
+    ];
+    this._form.computeLabel = (s) => (s.name === "title" ? t.titleLabel : t[s.name] || s.name);
+  }
+}
+
 // Registration. If the script is loaded before HA swaps window.customElements
 // (scoped registry), the definition may stay in the old registry - so we
 // check again after the page has loaded.
@@ -574,6 +642,20 @@ defineCard();
 window.addEventListener("load", defineCard);
 setTimeout(defineCard, 1000);
 setTimeout(defineCard, 5000);
+
+const TAG_EDITOR = "gas-invoices-card-editor";
+const defineEditor = () => {
+  if (customElements.get(TAG_EDITOR)) return;
+  try {
+    customElements.define(TAG_EDITOR, class extends GasInvoicesCardEditor {});
+  } catch (e) {
+    /* already defined */
+  }
+};
+defineEditor();
+window.addEventListener("load", defineEditor);
+setTimeout(defineEditor, 1000);
+setTimeout(defineEditor, 5000);
 
 window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === TAG)) {
