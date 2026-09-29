@@ -11,6 +11,8 @@ import redact  # noqa: E402
 import pytest  # noqa: E402
 
 TZ = ZoneInfo("Europe/Sofia")
+LON = ZoneInfo("Europe/London")
+OUTFOX = (Path(__file__).parent / "fixtures" / "outfox_statement.txt").read_text(encoding="utf-8")
 
 EUR_ONLY = """КОСТИНБРОДГАЗ ООД
 № 0100000001/09-02-2026
@@ -255,3 +257,41 @@ def test_equal_issue_date_later_start_wins():
     b = _span("B", "10-02-2026", (1, 10), (2, 1))
     inv.resolve_overlaps([a, b], [])
     assert a.superseded == [(b.start, a.end)] and not b.superseded
+
+
+def test_outfox_gas_only():
+    i = inv.parse_text(OUTFOX, LON)
+    assert i.supplier == "outfox" and i.number == "12345678" and i.date == "05-09-2026"
+    assert i.currency == "GBP" and i.total == 17.52 and i.fixed_cost == 9.06
+    assert i.m3 == 12.0 and round(i.kwh, 1) == 138.4 and not i.estimated_read
+
+
+def test_outfox_period_is_whole_days():
+    i = inv.parse_text(OUTFOX, LON)
+    assert i.start.astimezone(LON).isoformat() == "2026-08-04T00:00:00+01:00"
+    assert i.end.astimezone(LON).isoformat() == "2026-09-04T00:00:00+01:00"
+    assert i.days == 31
+
+
+def test_outfox_extras():
+    e = inv.parse_text(OUTFOX, LON).extras
+    assert e["standing_charge"] == 8.63 and e["vat"] == 0.83 and e["unit_charges"] == 8.06
+    assert e["calorific_value_mj_m3"] == 40.6 and e["volume_correction"] == 1.02264
+    assert e["tariff"] == "Fix'd Dual Jun26 12M v5" and e["kwh_billed"] == 138.4
+
+
+def test_outfox_estimated_read():
+    text = OUTFOX.replace(
+        "- your read your read\n02 Sep 26 Serial", "- estimated read estimated read\n02 Sep 26 Serial"
+    )
+    assert inv.parse_text(text, LON).estimated_read
+
+
+def test_outfox_imperial_meter():
+    text = OUTFOX.replace("Volume conversion factor × 1.0", "Volume conversion factor × 2.83")
+    assert round(inv.parse_text(text, LON).m3, 2) == 33.96
+
+
+def test_outfox_number_falls_back_to_statement_date():
+    i = inv.parse_text(OUTFOX.replace("Statement Number: 12345678", "Statement Number: ████"), LON)
+    assert i.number == "20260905"

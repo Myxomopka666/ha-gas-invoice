@@ -1,0 +1,151 @@
+BALANCE £437.10 CR
+Account Number: ████████
+Mr ████ ████
+3 ████ ████ Statement Number: 12345678
+████ Statement Date: 05/09/2026
+████ ████
+Hi Mr ████ ████, Don’t forget to send us your meter readings
+To ensure your bill is as accurate as possible
+YOUR ENERGY STATEMENT please submit your meter readings between
+28/09/26 and 03/10/26 at
+www.outfox.energy
+For the period of 04 Aug 26 to 03 Sep 26
+For energy supplied at: Could you pay less?
+Over the next 12 months, we have
+3 ████ ████ estimated your annual cost:
+£2,007.14 for your Electricity
+████
+£988.01 for your Gas
+████ ████ This is an estimate based on your expected annual energy usage,
+and your current tariff rates, charges and discounts, including VAT████
+ROTA LOAD BLOCK CODE: H Actual billings will vary depending on your usage and tariff selection.
+More information about your current tariff can be found overleaf.
+A. Previous Balance £277.62 CR
+Remember - it might be worth thinking about switching
+your tariff or supplier.
+B. Total Charges £110.52 DR
+Relevant Cheapest Tariff
+C. Total Payments Good to know!
+£270.00 CR
+You're already on our cheapest tariff.
+We will let you know if this changes.
+D. New Account Balance (D=A+B-C) £437.10 CR
+Alternative Cheapest Tariff
+Good to know!
+Cost of your energy this period You're already on our cheapest tariff.
+We will let you know if this changes.
+Electricity £93.00
+Gas £17.52
+Impartial Advice
+Contact Citizens Advice if you need help with an energy
+Remember:
+problem - for example with your bills or meters, or if you're
+As you are making regular Direct Debit payments, this statement is for information struggling to pay for the energy you use. They're the offical
+source of free and independent energy advice and support.
+purposes only and does not require payment.
+Go to: citizensadvice.org.uk/energy or call consumer
+service on 0808 223 1133 Mon to Fri, 9am-5pm.
+Thinking of switching your tariff?
+Emergency Numbers
+Gas: 0800 111 999
+You can now do so via the customer portal.
+Electricity: 105
+Visit: https://portal.outfox.energy/sign-in
+www.outfox.energy
+Email: ████
+MONDAY TO FRIDAY 08:30 - 17:00 | SATURDAY 09:00 - 14:00 | SUNDAY - ████D
+Outfox Energy is a trading name of Foxglove Energy Supply Ltd. Foxglove Energy Supply Ltd is registered in England and Wales.
+Company registration number 09689035, VAT ████
+Your Charges - Electricity
+Fix'd Dual Jun26 12M v5 (04 Aug 2026 to 03 Sep 2026) About your Electricity Tariff
+Period Register Previous Latest Units used kWh rate Charge
+reading reading
+01 801 511
+04 Aug 26 00 84614.0 84975.0 361.0kWh 20.64074p £74.51 S
+- your read your read 16 0000 0000 001
+02 Sep 26
+02 Sep 26 00 84975.0 84975.0 0.0kWh 20.64074p £0.00 Serial Number AB12C34567
+- your read your read
+03 Sep 26
+MPAN 1600000000001
+Standing charge (31 days @ 45.35890p per day) £14.06
+Tariff name Fix'd Dual Jun26
+Net Electricity Charges For Period £88.57 12M v5
+VAT ████
+Payment method Direct Debit
+Total Electricity Charges For Period £93.00
+Tariff type Fixed
+Exit fees £75.00
+Estimated Annual 8459.0kWh
+Consumption
+Tariff End Date 09 Jun 2027
+How much electricity did you use?
+For this period your average usage was 11.65kWh/day
+or £3.00/day (includes standing charge).
+www.outfox.energy
+Email: ████
+MONDAY TO FRIDAY 08:30 - 17:00 | SATURDAY 09:00 - 14:00 | SUNDAY - ████D
+Outfox Energy is a trading name of Foxglove Energy Supply Ltd. Foxglove Energy Supply Ltd is registered in England and Wales.
+Company registration number 09689035, VAT ████
+Your Charges - Gas
+Fix'd Dual Jun26 12M v5 (04 Aug 2026 to 03 Sep 2026) About your Gas Tariff
+Period Previous Latest Units used kWh rate Charge
+reading reading 1234567890
+04 Aug 26 22882.0 22894.0 138.4kWh 5.82052p £8.06
+- your read your read
+02 Sep 26 Serial Number ████
+Standing charge (31 days @ 27.83014p per day) £8.63
+MPRN 1234567890
+Net Gas Charges For Period £16.69
+Tariff name Fix'd Dual Jun26
+12M v5
+VAT ████
+Total Gas Charges For Period £17.52 Payment method Direct Debit
+Tariff type Fixed
+Exit fees £75.00
+Estimated Annual 14,421kWh
+Consumption
+Tariff End Date 09 Jun 2027
+How much gas did you use?
+For this period your average usage was 4.46kWh/day
+or £0.57/day (includes standing charge).
+www.outfox.energy
+Email: ████
+MONDAY TO FRIDAY 08:30 - 17:00 | SATURDAY 09:00 - 14:00 | SUNDAY - ████D
+Outfox Energy is a trading name of Foxglove Energy Supply Ltd. Foxglove Energy Supply Ltd is registered in England and Wales.
+Company registration number 09689035, VAT ████
+Explaining your gas usage
+Total Electricity Charges for period £93.00 We convert gas units from your meter into kWh to make
+sure the energy output is priced consistently. We do this
+using the formula below
+Total Gas Charges for period £17.52
+Meter units used 12
+B.Total Energy Charges £110.52
+Volume conversion factor × 1.0
+Please Note: Thank you for your meter reading on the 03 Sep 2026. Your Metric units 12.0
+energy use is based on this accurate reading and your daily standing
+Volume correction × 1.022640
+charge is applied for the full billing period.
+Calorific value × 40.600
+Convert to kWh ÷ 3.6
+Energy Used 138kWh
+www.outfox.energy
+Email: ████
+MONDAY TO FRIDAY 08:30 - 17:00 | SATURDAY 09:00 - 14:00 | SUNDAY - ████D
+Outfox Energy is a trading name of Foxglove Energy Supply Ltd. Foxglove Energy Supply Ltd is registered in England and Wales.
+Company registration number 09689035, VAT ████
+Your Payments
+Date of payment Type of payment Payment amount
+12 Aug 2026 Direct Debit £270.00
+C. Total Payments for this period: £270.00
+Your Balance
+A. Previous Balance £277.62 CR
+B. Total Charges £110.52 DR
+C. Total Payments £270.00 CR
+D. New Account Balance (D=A+B-C) £437.10 CR
+Balance: £437.10 CR
+www.outfox.energy
+Email: ████
+MONDAY TO FRIDAY 08:30 - 17:00 | SATURDAY 09:00 - 14:00 | SUNDAY - ████D
+Outfox Energy is a trading name of Foxglove Energy Supply Ltd. Foxglove Energy Supply Ltd is registered in England and Wales.
+Company registration number 09689035, VAT ████

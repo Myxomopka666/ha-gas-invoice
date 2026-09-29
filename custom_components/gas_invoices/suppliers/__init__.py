@@ -7,12 +7,12 @@ from __future__ import annotations
 
 from zoneinfo import ZoneInfo
 
-from . import kostinbrodgaz
+from . import kostinbrodgaz, outfox
 from .base import BGN_PER_EUR, DEFAULT_CALORIFIC, Invoice, Segment
 
 __all__ = ["BGN_PER_EUR", "DEFAULT_CALORIFIC", "Invoice", "Segment", "SUPPLIERS", "UnknownSupplierError", "detect", "parse", "supported_names"]
 
-SUPPLIERS = [kostinbrodgaz]
+SUPPLIERS = [kostinbrodgaz, outfox]
 
 
 class UnknownSupplierError(ValueError):
