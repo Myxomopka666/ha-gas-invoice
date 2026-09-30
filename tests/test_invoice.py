@@ -357,6 +357,50 @@ def test_redact_keeps_outfox_data():
     assert i.number == "12345678" and i.m3 == 12.0 and i.total == 17.52 and i.fixed_cost == 9.06
 
 
+# the fixture with the (anonymised) address as Outfox prints it: UPPERCASE, in two places
+OUTFOX_ADDR = (
+    OUTFOX.replace("3 ████ ████ Statement Number", "3 SOMESTREET CLOSE Statement Number")
+    .replace("████ Statement Date", "SOMETOWN Statement Date")
+    .replace("\n████ ████\nHi Mr", "\nSOMECOUNTY AB1 2CD\nHi Mr")
+    .replace("3 ████ ████ estimated", "3 SOMESTREET CLOSE estimated")
+    .replace("\n████\n£988.01", "\nSOMETOWN\n£988.01")
+    .replace("████ ████ This is an estimate", "SOMECOUNTY AB1 2CD This is an estimate")
+)
+
+
+def test_redact_outfox_uppercase_address():
+    assert OUTFOX_ADDR.count("SOMESTREET CLOSE") == 2 and OUTFOX_ADDR.count("SOMETOWN") == 2
+    out, _ = redact.redact(OUTFOX_ADDR)
+    for secret in ["SOMESTREET", "CLOSE", "SOMETOWN", "SOMECOUNTY", "AB1 2CD"]:
+        assert secret not in out, secret
+    assert "\n████ Statement Number: 12345678\n████ Statement Date: 05/09/2026\n" in out
+    assert "\n████ estimated your annual cost:\n" in out and "\n████\n£988.01 for your Gas" in out
+    assert "\n████ ████ This is an estimate" in out
+    assert "ROTA LOAD BLOCK CODE: H Actual billings" in out  # after the postcode: kept
+    i = inv.parse_text(out, LON)
+    assert i.number == "12345678" and i.m3 == 12.0 and i.total == 17.52 and i.fixed_cost == 9.06
+    assert i == inv.parse_text(OUTFOX_ADDR, LON)  # the parsers lose nothing to the masking
+
+
+@pytest.mark.parametrize("line", [
+    "12 HIGH STREET", "7A OLD MILL ROAD", "3 ST JOHN'S AVENUE", "1 THE GREEN LANE",
+    "10 PARK DRIVE", "2 NORTH WAY", "5 KINGS COURT", "8 ELM GROVE", "4 MOON CRESCENT", "9 ABBEY PLACE",
+])
+def test_redact_uppercase_street(line):
+    out, _ = redact.redact(f"{line} Statement Number: 12345678")
+    assert out == "████ Statement Number: 12345678", out
+
+
+def test_redact_town_only_inside_address_block():
+    out, _ = redact.redact("12 High Street Statement Number: 1\nAnytown AB1 2CD Statement Date: 05/09/2026")
+    assert "Anytown" not in out and out.endswith("████ ████ Statement Date: 05/09/2026")
+    # no street before it -> an UPPERCASE line is not a town
+    assert redact.redact("YOUR ENERGY STATEMENT\nAB1 2CD")[0] == "YOUR ENERGY STATEMENT\n████"
+    # a street without a postcode nearby -> the following lines are kept
+    text = "12 HIGH STREET\nROTA LOAD BLOCK CODE: H\nA\nB\nC\nD\nAB1 2CD"
+    assert redact.redact(text)[0] == "████\nROTA LOAD BLOCK CODE: H\nA\nB\nC\nD\n████"
+
+
 BASE = Path(__file__).parents[1] / "custom_components" / "gas_invoices"
 
 
