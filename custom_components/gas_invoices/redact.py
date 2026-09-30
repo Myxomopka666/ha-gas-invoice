@@ -4,8 +4,8 @@
 Masked: personal/company IDs after a label, valid Bulgarian ЕГН anywhere, IBAN,
 phones, e-mails, addresses, names (3 capitalised Cyrillic words, after a
 customer label, or after Mr/Mrs/...), customer and account numbers, UK meter
-identifiers (MPAN, MPRN, meter serial), GB VAT numbers, UK postcodes and street
-addresses. Numbers, dates and amounts needed by the parsers are kept.
+identifiers (MPAN, MPRN, meter serial), GB VAT numbers, UK postcodes, street
+addresses (also UPPERCASE) and the town lines between a street and its postcode. Numbers, dates and amounts needed by the parsers are kept.
 """
 from __future__ import annotations
 
@@ -51,11 +51,26 @@ RE_POSTCODE = re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}\b")
 RE_TITLE_NAME = re.compile(
     r"\b(Mr|Mrs|Ms|Miss|Mx|Dr)\.?([ \t]+)[A-Z][A-Za-z'\u2019-]+(?:[ \t]+(?!(?:Statement|Account|Date|Number|Customer|Reference|Your|Balance)\b)[A-Z][A-Za-z'\u2019-]+){0,2}"
 )
-RE_STREET = re.compile(
-    r"\b\d+[A-Za-z]?[ \t]+(?:[A-Z][a-z]+[ \t]+){1,3}"
-    r"(?:Street|St|Road|Rd|Lane|Ln|Avenue|Ave|Close|Drive|Way|Court|Ct|Place|Pl|Crescent|"
-    r"Gardens|Grove|Terrace|Hill|Park|Square|Mews|Row|View)\b"
+_STREET_SUFFIXES = (
+    "Street|St|Road|Rd|Lane|Ln|Avenue|Ave|Close|Drive|Way|Court|Ct|Place|Pl|Crescent|"
+    "Gardens|Grove|Terrace|Hill|Park|Square|Mews|Row|View"
 )
+# "12 High Street" or, as printed on Outfox statements, "3 SOMESTREET CLOSE"
+RE_STREET = re.compile(
+    r"\b\d+[A-Za-z]?[ \t]+(?:"
+    rf"(?:[A-Z][a-z]+[ \t]+){{1,3}}(?:{_STREET_SUFFIXES})"
+    rf"|(?:[A-Z][A-Z'’-]+[ \t]+){{1,3}}(?:{_STREET_SUFFIXES.upper()})"
+    r")\b"
+)
+# town/county at the start of a line of an address block: an UPPERCASE run (alone, before the
+# postcode or before a label such as "Statement Date"), or Capitalised words before the postcode
+_UP_WORDS = r"[A-Z][A-Z'’.-]+(?:[ \t]+[A-Z][A-Z'’.-]+)*"
+_TITLE_WORDS = r"[A-Z][A-Za-z'’-]+(?:[ \t]+[A-Z][A-Za-z'’-]+)*"
+RE_TOWN = re.compile(
+    rf"^([ \t]*)(?:{_UP_WORDS}(?=[ \t\r]*$|[ \t]+(?:{RE_POSTCODE.pattern})|[ \t]+[A-Z][a-z])"
+    rf"|{_TITLE_WORDS}(?=[ \t]+(?:{RE_POSTCODE.pattern})))"
+)
+_ADDR_BLOCK_LINES = 5  # how many lines after the street line the postcode is looked for
 
 _EGN_W = (2, 4, 8, 5, 10, 9, 7, 3, 6)
 
@@ -71,6 +86,22 @@ def _is_egn(s: str) -> bool:
         return False
     chk = sum(int(s[i]) * _EGN_W[i] for i in range(9)) % 11
     return (chk % 10) == int(s[9])
+
+
+def _mask_towns(text: str) -> tuple[str, int]:
+    """Masks the town lines between a street line and the postcode closing its address block
+    (other text may be interleaved, as in the two-column Outfox layout)."""
+    lines = text.split("\n")
+    count = 0
+    for i, line in enumerate(lines):
+        if not RE_STREET.search(line):
+            continue
+        last = min(i + _ADDR_BLOCK_LINES, len(lines) - 1)
+        end = next((j for j in range(i + 1, last + 1) if RE_POSTCODE.search(lines[j])), None)
+        for k in range(i + 1, (end or i) + 1):
+            lines[k], n = RE_TOWN.subn(lambda m: m.group(1) + MASK, lines[k])
+            count += n
+    return "\n".join(lines), count
 
 
 def _mask_value(m: re.Match) -> str:
@@ -106,6 +137,8 @@ def redact(text: str, extra: list[str] | None = None) -> tuple[str, int]:
     out = sub(RE_10DIGITS, lambda m: MASK if _is_egn(m.group(0)) else m.group(0), out)
     out = sub(RE_MPAN_SPACED, MASK, out)
     out = sub(RE_VAT_GB, MASK, out)
+    out, n = _mask_towns(out)  # before RE_POSTCODE: the postcode closes the address block
+    count += n
     out = sub(RE_POSTCODE, MASK, out)
     out = sub(RE_TITLE_NAME, lambda m: f"{m.group(1)}{m.group(2)}{MASK}", out)
     out = sub(RE_STREET, MASK, out)
