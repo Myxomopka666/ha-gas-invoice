@@ -38,7 +38,7 @@ Your gas invoice arrives weeks after the billing period ends. Gas Invoices reads
 | Supplier | Contributed by | Country | Currency | Supported invoices |
 |---|---|---|---|---|
 | КОСТИНБРОДГАЗ ООД | [@Myxomopka666](https://github.com/Myxomopka666) | 🇧🇬 Bulgaria | EUR (BGN converted) | All layouts since 2021: BGN only, BGN with 2022 government compensation, dual EUR/BGN, EUR only |
-| Outfox Energy | [@robinelvin](https://github.com/robinelvin) ([#1](https://github.com/Myxomopka666/ha-gas-invoice/issues/1)) | 🇬🇧 United Kingdom | GBP | Gas part of dual-fuel statements, metric and imperial meters |
+| Outfox Energy | [@robinelvin](https://github.com/robinelvin) ([#1](https://github.com/Myxomopka666/ha-gas-invoice/issues/1)) | 🇬🇧 United Kingdom | GBP | Gas part of dual-fuel statements, metric and imperial meters, statements split by a mid-period rate change |
 
 Your supplier is missing? **[Add your supplier](#-add-your-supplier)**. Everyone who helps add a supplier is credited here.
 
