@@ -15,6 +15,7 @@ import pytest  # noqa: E402
 TZ = ZoneInfo("Europe/Sofia")
 LON = ZoneInfo("Europe/London")
 OUTFOX = (Path(__file__).parent / "fixtures" / "outfox_statement.txt").read_text(encoding="utf-8")
+OUTFOX_SPLIT = (Path(__file__).parent / "fixtures" / "outfox_tariff_change.txt").read_text(encoding="utf-8")
 
 EUR_ONLY = """КОСТИНБРОДГАЗ ООД
 № 0100000001/09-02-2026
@@ -287,6 +288,28 @@ def test_outfox_estimated_read():
         "- your read your read\n02 Sep 26 Serial", "- estimated read estimated read\n02 Sep 26 Serial"
     )
     assert inv.parse_text(text, LON).estimated_read
+
+
+def test_outfox_tariff_change_covers_whole_period():
+    """A rate change mid-period splits the gas charges into two sub-sections."""
+    i = inv.parse_text(OUTFOX_SPLIT, LON)
+    assert i.number == "23456789" and i.total == 104.18 and i.m3 == 156.0
+    assert [s.m3 for s in i.segments] == [151.1, 4.9]
+    assert i.start.astimezone(LON).isoformat() == "2026-03-04T00:00:00+00:00"
+    assert i.segments[1].start.astimezone(LON).isoformat() == "2026-04-01T00:00:00+01:00"
+    assert i.end.astimezone(LON).isoformat() == "2026-04-04T00:00:00+01:00"
+
+
+def test_outfox_tariff_change_charges():
+    i = inv.parse_text(OUTFOX_SPLIT, LON)
+    e = i.extras
+    assert e["standing_charge"] == 8.83 and e["vat"] == 4.96 and e["unit_charges"] == 90.39
+    assert i.fixed_cost == 9.27 and e["kwh_billed"] == 1772.6
+
+
+def test_outfox_tariff_change_estimated_split_read_is_not_estimated():
+    """The estimate at the tariff change only splits the period; the closing read is actual."""
+    assert not inv.parse_text(OUTFOX_SPLIT, LON).estimated_read
 
 
 def test_outfox_imperial_meter():

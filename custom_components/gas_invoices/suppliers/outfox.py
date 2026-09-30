@@ -1,5 +1,8 @@
 """Outfox Energy (UK). Dual-fuel statements: only the gas section is read.
 
+A rate change mid-period splits the gas section into sub-sections, each with
+its own period, rows, standing charge and net; VAT and the total come once, last.
+
 Dates are whole days. A period "04 Aug 2026 to 03 Sep 2026" includes its last
 day, so it ends at 00:00 on 04 Sep, where the next statement starts.
 """
@@ -37,7 +40,8 @@ RE_NET = re.compile(rf"Net Gas Charges For Period[ \t]*£({UNUM})")
 RE_FACTOR = re.compile(rf"Volume conversion factor[ \t]*[×x][ \t]*({UNUM})")
 RE_CORRECTION = re.compile(rf"Volume correction[ \t]*[×x][ \t]*({UNUM})")
 RE_CV = re.compile(rf"Calorific value[ \t]*[×x][ \t]*({UNUM})")
-RE_SERIAL = re.compile(r"Serial Number[ 	]+([A-Z0-9]{5,})")
+RE_READ = re.compile(r"your read|estimat", re.I)  # "- <previous> <latest>"
+RE_SERIAL =re.compile(r"Serial Number[ 	]+([A-Z0-9]{5,})")
 RE_STATEMENT = re.compile(r"Statement Number:[ \t]*(\d+)")
 RE_STATEMENT_DATE = re.compile(r"Statement Date:[ \t]*(\d{2})/(\d{2})/(\d{4})")
 
@@ -87,7 +91,7 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
     )
     factor = _opt(RE_FACTOR, text) or 1.0
     meter = m.group(1) if (m := RE_SERIAL.search(section)) else ""
-    period_end = day(period.group(2), tz, plus=1)
+    period_end = day(list(RE_PERIOD.finditer(section))[-1].group(2), tz, plus=1)
     kwh = unit_charges = 0.0
     for i, r in enumerate(rows):
         start = day(r.group(1), tz)
@@ -98,16 +102,18 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
         )
         kwh += unum(r.group(4))
         unit_charges += unum(r.group(6))
-        if "estimat" in r.group(7).lower():
-            inv.estimated_read = True
+    # Only the closing reading counts: an estimate at a rate change just splits the period.
+    reads = RE_READ.findall(rows[-1].group(7))
+    inv.estimated_read = bool(reads) and reads[-1].lower() == "estimat"
 
     standing = sum(unum(m.group(1)) for m in RE_STANDING.finditer(section))
-    net = _opt(RE_NET, section) or total
+    net = sum(unum(m.group(1)) for m in RE_NET.finditer(section)) or total
     inv.fixed_cost = round(standing * total / net, 2) if net else standing
     if inv.m3:
         inv.calorific = kwh / inv.m3 / 1000
 
-    tariff = m.group(1).strip() if (m := RE_TARIFF.search(section)) else None
+    tariffs = dict.fromkeys(m.group(1).strip() for m in RE_TARIFF.finditer(section))
+    tariff = " / ".join(tariffs) or None
     extras = {
         "kwh_billed": round(kwh, 1),
         "unit_charges": round(unit_charges, 2),
