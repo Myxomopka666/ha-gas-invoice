@@ -4,6 +4,7 @@
 [![release][release-badge]][release-url]
 [![validate][validate-badge]][validate-url]
 [![license][license-badge]][license-url]
+[![HACS default][hacs-default-badge]][hacs-default-url]
 ![Home Assistant][ha-badge]
 
 Track your **natural gas consumption and cost** in the Home Assistant **Energy dashboard**, with no gas meter sensor, straight from the PDF invoices of your gas supplier.
@@ -45,6 +46,9 @@ Your supplier is missing? **[Add your supplier](#-add-your-supplier)**. Everyone
 ## Installation
 
 ### HACS (recommended)
+
+> [!NOTE]
+> ⏳ **Waiting to join the HACS default store.** The request is in the [HACS review queue](https://github.com/hacs/default/pull/11380), which is reviewed oldest first. Until then, the button below adds Gas Invoices to HACS as a custom repository. You get the same updates.
 
 Use this link to open the repository in HACS in your Home Assistant. If it isn't there yet, HACS offers to add it as a custom repository automatically:
 
@@ -240,6 +244,8 @@ Parsers live in `custom_components/gas_invoices/suppliers/`. Each module defines
 [MIT](LICENSE)
 
 [hacs-badge]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square
+[hacs-default-badge]: https://img.shields.io/github/pulls/detail/state/hacs/default/11380?style=flat-square&label=HACS%20default&logo=homeassistantcommunitystore
+[hacs-default-url]: https://github.com/hacs/default/pull/11380
 [hacs-url]: https://my.home-assistant.io/redirect/hacs_repository/?owner=Myxomopka666&repository=ha-gas-invoice&category=integration
 [release-badge]: https://img.shields.io/github/v/release/Myxomopka666/ha-gas-invoice?style=flat-square
 [release-url]: https://github.com/Myxomopka666/ha-gas-invoice/releases/latest
