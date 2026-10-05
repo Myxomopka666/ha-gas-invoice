@@ -18,6 +18,10 @@ class Segment:
     start_reading: float
     end_reading: float
     m3: float
+    # Own share of the invoice total, when the supplier prices segments differently
+    # (a rate change mid-period). None -> the invoice's average price applies.
+    variable_cost: float | None = None
+    fixed_cost: float | None = None
 
 
 @dataclass

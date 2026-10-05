@@ -263,11 +263,23 @@ def distribute(
         fixed = inv.fixed_cost if inv.m3 else total
         cost_per_m3 = (total - fixed) / inv.m3 if inv.m3 else 0.0
         fixed_per_hour = fixed / inv_hours
+        # Segments priced separately; scaled so they still add up to the invoice total.
+        priced = all(s.variable_cost is not None and s.fixed_cost is not None for s in inv.segments)
+        seg_sum = sum(s.variable_cost + s.fixed_cost for s in inv.segments) if priced else 0.0
+        scale = total / seg_sum if seg_sum else 0.0
+        priced = priced and bool(seg_sum)
 
         for seg, hours, frac in parts:
             total_frac = sum(frac)
             if not total_frac:
                 continue
+            seg_cost_per_m3, seg_fixed_per_hour = cost_per_m3, fixed_per_hour
+            if priced:
+                variable, seg_fixed = seg.variable_cost * scale, seg.fixed_cost * scale
+                if not seg.m3:  # nothing to follow: spread it like the standing charge
+                    variable, seg_fixed = 0.0, seg_fixed + variable
+                seg_cost_per_m3 = variable / seg.m3 if seg.m3 else 0.0
+                seg_fixed_per_hour = seg_fixed / total_frac
             base_total = min(bl * total_frac / 24, seg.m3)
             heat_total = seg.m3 - base_total
 
@@ -290,5 +302,5 @@ def distribute(
                 row = out.setdefault(h, [0.0, 0.0, 0.0])
                 row[0] += m3
                 row[1] += m3 * kwh_per_m3
-                row[2] += m3 * cost_per_m3 + f * fixed_per_hour
+                row[2] += m3 * seg_cost_per_m3 + f * seg_fixed_per_hour
     return out
