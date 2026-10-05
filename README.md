@@ -215,7 +215,7 @@ Some suppliers (smart meters, detailed statements) include consumption **per day
 
 - Parsers return **one segment per day or hour** when the invoice provides it.
 - These values are written **as they are**. Temperature-based distribution is used only for periods the invoice doesn't break down (for example, spreading one day over its hours).
-- **Per-segment cost** for time-of-use tariffs (day/night prices), instead of one average price per m³ per invoice.
+- **Per-segment cost** for time-of-use tariffs (day/night prices). Since 1.4.2 each part of a statement split by a rate change already keeps its own price, instead of one average price per m³ per invoice.
 - The import summary shows which periods are measured and which are estimated.
 
 ### Other ideas

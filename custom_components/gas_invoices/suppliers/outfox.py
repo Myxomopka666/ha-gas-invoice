@@ -9,6 +9,7 @@ day, so it ends at 00:00 on 04 Sep, where the next statement starts.
 from __future__ import annotations
 
 import re
+from bisect import bisect_right
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -66,6 +67,27 @@ def detect(text: str) -> bool:
     return "outfox" in text.lower()
 
 
+def _price_segments(inv: Invoice, section: str, rows: list, standings: list) -> None:
+    """Each row's own unit charge, plus its sub-section's standing charge split by
+    days; VAT (printed once, for the whole section) is added in proportion."""
+    starts = [m.start() for m in RE_PERIOD.finditer(section)] + [len(section)]
+    by_sub: dict[int, list[int]] = {}
+    for i, r in enumerate(rows):
+        by_sub.setdefault(bisect_right(starts, r.start()) - 1, []).append(i)
+    fixed = [0.0] * len(rows)
+    for k, idx in by_sub.items():
+        amount = sum(unum(m.group(1)) for m in standings if starts[k] <= m.start() < starts[k + 1])
+        days = [inv.segments[i].end - inv.segments[i].start for i in idx]
+        span = sum(d.total_seconds() for d in days)
+        for i, d in zip(idx, days):
+            fixed[i] = amount * d.total_seconds() / span if span else amount / len(idx)
+    net = sum(unum(r.group(6)) for r in rows) + sum(fixed)
+    vat = (inv.total or 0.0) / net if net else 1.0
+    for seg, r, f in zip(inv.segments, rows, fixed):
+        seg.variable_cost = unum(r.group(6)) * vat
+        seg.fixed_cost = f * vat
+
+
 def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
     gas = RE_GAS.search(text)
     if not gas:
@@ -106,9 +128,11 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
     reads = RE_READ.findall(rows[-1].group(7))
     inv.estimated_read = bool(reads) and reads[-1].lower() == "estimat"
 
-    standing = sum(unum(m.group(1)) for m in RE_STANDING.finditer(section))
+    standings = list(RE_STANDING.finditer(section))
+    standing = sum(unum(m.group(1)) for m in standings)
     net = sum(unum(m.group(1)) for m in RE_NET.finditer(section)) or total
     inv.fixed_cost = round(standing * total / net, 2) if net else standing
+    _price_segments(inv, section, rows, standings)
     if inv.m3:
         inv.calorific = kwh / inv.m3 / 1000
 

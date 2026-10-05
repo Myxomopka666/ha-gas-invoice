@@ -307,6 +307,25 @@ def test_outfox_tariff_change_charges():
     assert i.fixed_cost == 9.27 and e["kwh_billed"] == 1772.6
 
 
+def test_outfox_tariff_change_cost_per_sub_section():
+    """Each sub-section keeps its own rate: net charges plus 5% VAT, not one blended price."""
+    i = inv.parse_text(OUTFOX_SPLIT, LON)
+    out = inv.distribute([i], None, 18.0, 0.0, [])
+    april = i.segments[1].start
+    march = sum(v[2] for h, v in out.items() if h < april)
+    april_cost = sum(v[2] for h, v in out.items() if h >= april)
+    assert round(march, 2) == 100.40  # 95.62 × 1.05
+    assert round(april_cost, 2) == 3.78  # 3.60 × 1.05
+    assert sum(v[2] for v in out.values()) == pytest.approx(104.18)
+
+
+def test_segment_costs_follow_invoice_total():
+    """An invoice total changed after parsing rescales the segment costs."""
+    i = dataclasses.replace(inv.parse_text(OUTFOX_SPLIT, LON), total=110.0)
+    out = inv.distribute([i], None, 18.0, 0.0, [])
+    assert sum(v[2] for v in out.values()) == pytest.approx(110.0)
+
+
 def test_outfox_tariff_change_estimated_split_read_is_not_estimated():
     """The estimate at the tariff change only splits the period; the closing read is actual."""
     assert not inv.parse_text(OUTFOX_SPLIT, LON).estimated_read
