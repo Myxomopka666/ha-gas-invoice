@@ -2,6 +2,8 @@
 
 A rate change mid-period splits the gas section into sub-sections, each with
 its own period, rows, standing charge and net; VAT and the total come once, last.
+A last sub-section can have only a standing charge, for the days after the
+closing reading.
 
 Dates are whole days. A period "04 Aug 2026 to 03 Sep 2026" includes its last
 day, so it ends at 00:00 on 04 Sep, where the next statement starts.
@@ -9,7 +11,6 @@ day, so it ends at 00:00 on 04 Sep, where the next statement starts.
 from __future__ import annotations
 
 import re
-from bisect import bisect_right
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -67,25 +68,38 @@ def detect(text: str) -> bool:
     return "outfox" in text.lower()
 
 
-def _price_segments(inv: Invoice, section: str, rows: list, standings: list) -> None:
-    """Each row's own unit charge, plus its sub-section's standing charge split by
-    days; VAT (printed once, for the whole section) is added in proportion."""
-    starts = [m.start() for m in RE_PERIOD.finditer(section)] + [len(section)]
-    by_sub: dict[int, list[int]] = {}
-    for i, r in enumerate(rows):
-        by_sub.setdefault(bisect_right(starts, r.start()) - 1, []).append(i)
-    fixed = [0.0] * len(rows)
-    for k, idx in by_sub.items():
-        amount = sum(unum(m.group(1)) for m in standings if starts[k] <= m.start() < starts[k + 1])
-        days = [inv.segments[i].end - inv.segments[i].start for i in idx]
-        span = sum(d.total_seconds() for d in days)
-        for i, d in zip(idx, days):
-            fixed[i] = amount * d.total_seconds() / span if span else amount / len(idx)
-    net = sum(unum(r.group(6)) for r in rows) + sum(fixed)
-    vat = (inv.total or 0.0) / net if net else 1.0
-    for seg, r, f in zip(inv.segments, rows, fixed):
-        seg.variable_cost = unum(r.group(6)) * vat
-        seg.fixed_cost = f * vat
+def _segments(section: str, rows: list, tz: ZoneInfo, meter: str, factor: float) -> list:
+    """(segment, unit charge, standing charge) in date order. Each sub-section ends
+    where its own period ends, and its standing charge is split over its rows by
+    days. A sub-section with no readings yet (only a standing charge) becomes a
+    0 m³ segment, so no gas is spread into it."""
+    periods = list(RE_PERIOD.finditer(section))
+    bounds = [p.start() for p in periods] + [len(section)]
+    standings = list(RE_STANDING.finditer(section))
+    reading = unum(rows[0].group(2)) * factor
+    out = []
+    for k, p in enumerate(periods):
+        lo, hi = bounds[k], bounds[k + 1]
+        sub_rows = [r for r in rows if lo <= r.start() < hi]
+        standing = sum(unum(m.group(1)) for m in standings if lo <= m.start() < hi)
+        end = day(p.group(2), tz, plus=1)
+        if not sub_rows:
+            out.append((Segment(meter, day(p.group(1), tz), end, reading, reading, 0.0), 0.0, standing))
+            continue
+        segs = []
+        for i, r in enumerate(sub_rows):
+            seg_end = day(sub_rows[i + 1].group(1), tz) if i + 1 < len(sub_rows) else end
+            r1, r2 = unum(r.group(2)), unum(r.group(3))
+            seg = Segment(
+                meter, day(r.group(1), tz), seg_end, r1 * factor, r2 * factor, round((r2 - r1) * factor, 3)
+            )
+            segs.append((seg, unum(r.group(6))))
+            reading = r2 * factor
+        span = sum((seg.end - seg.start).total_seconds() for seg, _ in segs)
+        for seg, charge in segs:
+            share = (seg.end - seg.start).total_seconds() / span if span else 1 / len(segs)
+            out.append((seg, charge, standing * share))
+    return out
 
 
 def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
@@ -113,26 +127,22 @@ def parse(text: str, tz: ZoneInfo, filename: str = "") -> Invoice:
     )
     factor = _opt(RE_FACTOR, text) or 1.0
     meter = m.group(1) if (m := RE_SERIAL.search(section)) else ""
-    period_end = day(list(RE_PERIOD.finditer(section))[-1].group(2), tz, plus=1)
-    kwh = unit_charges = 0.0
-    for i, r in enumerate(rows):
-        start = day(r.group(1), tz)
-        end = day(rows[i + 1].group(1), tz) if i + 1 < len(rows) else period_end
-        r1, r2 = unum(r.group(2)), unum(r.group(3))
-        inv.segments.append(
-            Segment(meter, start, end, r1 * factor, r2 * factor, round((r2 - r1) * factor, 3))
-        )
-        kwh += unum(r.group(4))
-        unit_charges += unum(r.group(6))
+    parts = _segments(section, rows, tz, meter, factor)
+    inv.segments = [seg for seg, _, _ in parts]
+    # VAT is printed once, for the whole section: added to each part in proportion.
+    billed = sum(charge + fixed for _, charge, fixed in parts)
+    vat = total / billed if billed else 1.0
+    for seg, charge, fixed in parts:
+        seg.variable_cost, seg.fixed_cost = charge * vat, fixed * vat
+    kwh = sum(unum(r.group(4)) for r in rows)
+    unit_charges = sum(unum(r.group(6)) for r in rows)
     # Only the closing reading counts: an estimate at a rate change just splits the period.
     reads = RE_READ.findall(rows[-1].group(7))
     inv.estimated_read = bool(reads) and reads[-1].lower() == "estimat"
 
-    standings = list(RE_STANDING.finditer(section))
-    standing = sum(unum(m.group(1)) for m in standings)
+    standing = sum(unum(m.group(1)) for m in RE_STANDING.finditer(section))
     net = sum(unum(m.group(1)) for m in RE_NET.finditer(section)) or total
     inv.fixed_cost = round(standing * total / net, 2) if net else standing
-    _price_segments(inv, section, rows, standings)
     if inv.m3:
         inv.calorific = kwh / inv.m3 / 1000
 

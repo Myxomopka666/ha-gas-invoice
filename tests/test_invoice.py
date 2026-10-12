@@ -16,6 +16,7 @@ TZ = ZoneInfo("Europe/Sofia")
 LON = ZoneInfo("Europe/London")
 OUTFOX = (Path(__file__).parent / "fixtures" / "outfox_statement.txt").read_text(encoding="utf-8")
 OUTFOX_SPLIT = (Path(__file__).parent / "fixtures" / "outfox_tariff_change.txt").read_text(encoding="utf-8")
+OUTFOX_STANDING = (Path(__file__).parent / "fixtures" / "outfox_standing_only_part.txt").read_text(encoding="utf-8")
 
 EUR_ONLY = """КОСТИНБРОДГАЗ ООД
 № 0100000001/09-02-2026
@@ -317,6 +318,26 @@ def test_outfox_tariff_change_cost_per_sub_section():
     assert round(march, 2) == 100.40  # 95.62 × 1.05
     assert round(april_cost, 2) == 3.78  # 3.60 × 1.05
     assert sum(v[2] for v in out.values()) == pytest.approx(104.18)
+
+
+def test_outfox_standing_only_part():
+    """A last part with only a standing charge (no reading yet) gets no gas:
+    the 23 m³ stay in 04-30 Sep, and 01-03 Oct carries just its standing charge."""
+    i = inv.parse_text(OUTFOX_STANDING, LON)
+    assert i.total == 24.73 and i.m3 == 23.0
+    assert [s.m3 for s in i.segments] == [23.0, 0.0]
+    assert i.segments[0].end.astimezone(LON).isoformat() == "2026-10-01T00:00:00+01:00"
+    assert i.end.astimezone(LON).isoformat() == "2026-10-04T00:00:00+01:00"
+    assert i.extras["standing_charge"] == 8.34 and i.extras["vat"] == 1.18
+    out = inv.distribute([i], None, 18.0, 0.0, [])
+    october = i.segments[1].start
+    sep = [v for h, v in out.items() if h < october]
+    oct_ = [v for h, v in out.items() if h >= october]
+    assert sum(v[0] for v in sep) == pytest.approx(23.0)
+    assert sum(v[0] for v in oct_) == pytest.approx(0.0)
+    assert round(sum(v[2] for v in sep), 2) == 23.86  # 22.72 + VAT
+    assert round(sum(v[2] for v in oct_), 2) == 0.87  # 0.83 + VAT
+    assert sum(v[2] for v in out.values()) == pytest.approx(24.73)
 
 
 def test_segment_costs_follow_invoice_total():
